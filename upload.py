@@ -34,43 +34,47 @@ def main():
         time.sleep(1)
     
     direct_url = user_input["data"]
-    file_name = direct_url.split('/')[-1].split('?')[0] or "movie.mp4"
+    # Link se filename nikalna
+    file_name = direct_url.split('/')[-1].split('?')[0] or "jazz_upload.mp4"
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        # Login state use kar rahe hain (OTP nahi mangega)
         context = browser.new_context(storage_state="state.json" if os.path.exists("state.json") else None)
         page = context.new_page()
-        page.goto("https://cloud.jazzdrive.com.pk/")
+        
+        # Jazz Drive par jana
+        page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
         time.sleep(5)
 
         bot.send_message(chat_id, f"🚀 Streaming Start: {file_name}")
 
         try:
-            # 1. GitHub par choti si temporary file create karna (sirf upload trigger ke liye)
-            # Hum file ko chunks mein stream karenge
-            with requests.get(direct_url, stream=True) as r:
-                r.raise_for_status()
-                with open(file_name, 'wb') as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        f.write(chunk)
+            # 1. File ko stream karke GitHub PC par temporary save karna
+            response = requests.get(direct_url, stream=True)
+            with open(file_name, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=1024*1024): # 1MB chunks
+                    if chunk: f.write(chunk)
             
-            # 2. Asli Uploading via Browser
-            page.evaluate("document.querySelectorAll('header button')[2].click()")
-            time.sleep(2)
+            # 2. Upload Trigger (Fixed Selector)
+            # Pehle "Plus" ya "Upload" button ko dhoondna
+            page.wait_for_selector("button", timeout=10000)
+            
+            # Smart Upload: Direct file input ko use karna
             with page.expect_file_chooser() as fc_info:
-                page.get_by_text("Upload files").first.click()
-            fc_info.value.set_files(os.path.abspath(file_name))
+                # Yeh sabse behtar tareeqa hai upload trigger karne ka
+                page.locator("input[type='file']").set_input_files(os.path.abspath(file_name))
             
-            # Wait for completion
+            bot.send_message(chat_id, "✅ File Jazz Drive ko bhej di gayi hai. Uploading...")
+            
+            # Progress ka intezar (Visible text check)
             page.get_by_text("Uploads completed", timeout=0).wait_for()
-            bot.send_message(chat_id, f"🎉 MUBARAK! {file_name} Jazz Drive mein pohanch gayi.")
+            bot.send_message(chat_id, f"🎉 MUBARAK! {file_name} upload ho gayi.")
             
-            # Clean up
+            # Safaya
             if os.path.exists(file_name): os.remove(file_name)
 
         except Exception as e:
-            bot.send_message(chat_id, f"❌ Upload Error: {str(e)[:100]}")
+            bot.send_message(chat_id, f"❌ Error: {str(e)[:150]}")
         
         browser.close()
 
