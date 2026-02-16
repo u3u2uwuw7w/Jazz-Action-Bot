@@ -1,26 +1,17 @@
-name: Jazz Drive 24/7 Bot
-
+name: Jazz Drive Bot
 on:
-  workflow_dispatch: # Ye button se chalane ke liye hai
-
+  workflow_dispatch:
 jobs:
-  keep_alive:
+  run_bot:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
-      - name: Install Tools
+      - name: Install
         run: |
           pip install playwright pyTelegramBotAPI
           playwright install chromium
-
-      - name: Run Bot Loop
-        run: |
-          # Yeh bot ko tab tak zinda rakhega jab tak upload poora na ho jaye
-          python upload.py
+      - name: Start
+        run: python upload.py
