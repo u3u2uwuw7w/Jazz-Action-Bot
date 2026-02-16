@@ -1,10 +1,10 @@
-name: Jazz Drive Remote Bot
+name: Jazz Drive 24/7 Bot
 
 on:
-  workflow_dispatch: # Button se chalaein
+  workflow_dispatch:
 
 jobs:
-  remote_job:
+  upload_job:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -15,18 +15,11 @@ jobs:
         with:
           python-version: '3.10'
 
-      # 🔥 Yeh step bot ko super fast bana dega
-      - name: Cache Playwright
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright
-
       - name: Install Tools
         run: |
-          pip install playwright pyTelegramBotAPI requests
+          pip install playwright pyTelegramBotAPI
           playwright install chromium
 
-      - name: Run Remote Bot
+      - name: Run Bot
         run: |
           python upload.py
