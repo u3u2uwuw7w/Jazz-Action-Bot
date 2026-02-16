@@ -19,12 +19,6 @@ def handle_messages(message):
     if text.startswith('http') and user_input["state"] == "WAITING_FOR_LINK":
         user_input["data"] = text
         user_input["state"] = "LINK_RECEIVED"
-    elif user_input["state"] == "WAITING_FOR_NUMBER":
-        user_input["data"] = text
-        user_input["state"] = "NUMBER_RECEIVED"
-    elif user_input["state"] == "WAITING_FOR_OTP":
-        user_input["data"] = text
-        user_input["state"] = "OTP_RECEIVED"
 
 def bot_polling():
     bot.polling(non_stop=True)
@@ -40,50 +34,44 @@ def main():
         time.sleep(1)
     
     direct_url = user_input["data"]
+    file_name = direct_url.split('/')[-1].split('?')[0] or "movie.mp4"
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        # 🛡️ Human-like context
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-            storage_state="state.json" if os.path.exists("state.json") else None
-        )
+        # Login state use kar rahe hain (OTP nahi mangega)
+        context = browser.new_context(storage_state="state.json" if os.path.exists("state.json") else None)
         page = context.new_page()
-        page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
+        page.goto("https://cloud.jazzdrive.com.pk/")
         time.sleep(5)
 
-        # 📱 Login Logic Fix
-        if page.locator("//*[@id='msisdn']").is_visible():
-            user_input["state"] = "WAITING_FOR_NUMBER"
-            bot.send_message(chat_id, "📱 Apna Jazz Number (03...) bhejein:")
-            while user_input["state"] != "NUMBER_RECEIVED": time.sleep(1)
-            
-            # Number fill karna aur button click karna
-            page.locator("//*[@id='msisdn']").fill(user_input["data"])
-            time.sleep(2)
-            # Yahan hum double check kar rahe hain ke button click ho
-            btn = page.locator("//*[@id='signinbtn']").first
-            btn.click()
-            time.sleep(1)
-            btn.dispatch_event("click") # Extra push
-            
-            bot.send_message(chat_id, "⏳ OTP Request bhej di hai... Intezar karein.")
-            
-            user_input["state"] = "WAITING_FOR_OTP"
-            bot.send_message(chat_id, "🔢 Jazz ki taraf se aaya hoa 4-Digit OTP bhejein:")
-            while user_input["state"] != "OTP_RECEIVED": time.sleep(1)
-            
-            # OTP Fill logic
-            page.locator("//input[@aria-label='Digit 1']").press_sequentially(user_input["data"], delay=200)
-            time.sleep(5)
-            
-            # Session save
-            context.storage_state(path="state.json")
-            bot.send_message(chat_id, "✅ Login Success!")
+        bot.send_message(chat_id, f"🚀 Streaming Start: {file_name}")
 
-        # 🚀 Upload Logic
-        bot.send_message(chat_id, "🚀 Jazz Drive par remote upload process shuru...")
-        # (Aage ka upload code wahi hai)
+        try:
+            # 1. GitHub par choti si temporary file create karna (sirf upload trigger ke liye)
+            # Hum file ko chunks mein stream karenge
+            with requests.get(direct_url, stream=True) as r:
+                r.raise_for_status()
+                with open(file_name, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            
+            # 2. Asli Uploading via Browser
+            page.evaluate("document.querySelectorAll('header button')[2].click()")
+            time.sleep(2)
+            with page.expect_file_chooser() as fc_info:
+                page.get_by_text("Upload files").first.click()
+            fc_info.value.set_files(os.path.abspath(file_name))
+            
+            # Wait for completion
+            page.get_by_text("Uploads completed", timeout=0).wait_for()
+            bot.send_message(chat_id, f"🎉 MUBARAK! {file_name} Jazz Drive mein pohanch gayi.")
+            
+            # Clean up
+            if os.path.exists(file_name): os.remove(file_name)
+
+        except Exception as e:
+            bot.send_message(chat_id, f"❌ Upload Error: {str(e)[:100]}")
+        
         browser.close()
 
 if __name__ == "__main__":
