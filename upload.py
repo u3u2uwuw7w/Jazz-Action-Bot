@@ -8,12 +8,11 @@ from playwright.sync_api import sync_playwright
 TOKEN = "8334787902:AAHrmpTxnBCmqhfCDBaAAdU4j7IB5Xdd1ks"
 chat_id = "7186647955" 
 bot = telebot.TeleBot(TOKEN)
-FILE_NAME = "jazz_upload_file.mp4"
+FILE_NAME = "video.mp4" # Simple name to avoid errors
 
 user_input = {"state": "IDLE", "data": None}
 
 def take_screenshot(page, caption):
-    """PC ki screen ki photo khench kar Telegram bhejta hai"""
     try:
         path = "status.png"
         page.screenshot(path=path)
@@ -44,34 +43,38 @@ threading.Thread(target=bot_polling, daemon=True).start()
 def main():
     global user_input
     user_input["state"] = "WAITING_FOR_LINK"
-    bot.send_message(chat_id, "👋 Stable System + Live Progress Ready!\n🔗 Direct Link bhejein:")
+    bot.send_message(chat_id, "🚀 FIXED MASTER BOT READY!\n🔗 Direct Link bhejein:")
     while user_input["state"] != "LINK_RECEIVED": time.sleep(1)
     
     link = user_input["data"]
-    bot.send_message(chat_id, "⏳ GitHub PC download kar raha hai...")
+    bot.send_message(chat_id, "⏳ Download shuru ho raha hai...")
     
-    # 📥 Stable download
+    # 📥 Stable download with fixed filename
     os.system(f"curl -L -o {FILE_NAME} '{link}'")
-    bot.send_message(chat_id, "✅ Download Mukammal! Ab Jazz Drive par upload shuru ho raha hai...")
+    
+    if not os.path.exists(FILE_NAME):
+        bot.send_message(chat_id, "❌ Download fail ho gaya! Link check karein.")
+        return
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        # Login state load karna
         context = browser.new_context(storage_state="state.json" if os.path.exists("state.json") else None)
         page = context.new_page()
         page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
         time.sleep(5)
 
-        # 🍪 Cookie Banner Hatana
+        # 🍪 STEP 1: Cookie Banner Hatana (Jo progress rok raha hai)
         try:
-            if page.get_by_text("Accept All").is_visible():
-                page.get_by_text("Accept All").click()
+            cookie = page.get_by_text("Accept All")
+            if cookie.is_visible():
+                cookie.click()
+                time.sleep(2)
         except: pass
 
-        # 📱 Login Logic (Agar zaroorat ho)
+        # 📱 Login Handle (Agar session na ho)
         if page.locator("//*[@id='msisdn']").is_visible():
             user_input["state"] = "WAITING_FOR_NUMBER"
-            bot.send_message(chat_id, "📱 Jazz Number (03...) bhejein:")
+            bot.send_message(chat_id, "📱 Jazz Number bhejein:")
             while user_input["state"] != "NUMBER_RECEIVED": time.sleep(1)
             page.locator("//*[@id='msisdn']").fill(user_input["data"])
             page.locator("//*[@id='signinbtn']").first.click()
@@ -82,36 +85,26 @@ def main():
             time.sleep(5)
             context.storage_state(path="state.json")
 
-        # 🚀 Uploading with Live Screenshots
+        # 🚀 STEP 2: Uploading with Progress Photos
         try:
-            # File select karna
+            bot.send_message(chat_id, "🛰️ Jazz Drive par file phenk raha hoon...")
             page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
             
-            # 🔥 1GB+ Confirmation
-            time.sleep(10) 
+            # 🔥 1GB+ Pop-up Handling
+            time.sleep(10)
             yes_btn = page.get_by_text("Yes", exact=False)
             if yes_btn.is_visible():
-                take_screenshot(page, "⚠️ 1GB+ Alert: 'Yes' daba raha hoon.")
                 yes_btn.click()
-            
-            bot.send_message(chat_id, "🛰️ Uploading jaari hai. Main har 2 min baad photo bhejunga...")
+                bot.send_message(chat_id, "✅ Large file confirmed!")
 
-            # 🔄 LIVE PROGRESS LOOP
-            upload_complete = False
-            while not upload_complete:
-                # Check karein ke kya upload khatam ho gaya?
-                if page.get_by_text("Uploads completed").is_visible():
-                    upload_complete = True
-                else:
-                    # Agar nahi hua toh photo bhej kar wait karein
-                    take_screenshot(page, "🕒 Uploading Progress... (Abhi process chal raha hai)")
-                    time.sleep(120) # 2 minute ka intezar
+            # 🔄 PROGRESS SCREENSHOT LOOP
+            while not page.get_by_text("Uploads completed").is_visible():
+                take_screenshot(page, "🕒 Uploading Progress... (Live view)")
+                time.sleep(120) # Har 2 minute baad photo
             
-            take_screenshot(page, "🎉 Upload Mukammal!")
-            bot.send_message(chat_id, "🎉 MUBARAK HO! File Jazz Drive mein pohanch gayi.")
-            
+            bot.send_message(chat_id, "🎉 MUBARAK HO! File 100% Upload ho gayi.")
+            take_screenshot(page, "✅ Final Status")
         except Exception as e:
-            take_screenshot(page, "❌ Error Screen")
             bot.send_message(chat_id, f"❌ Error: {str(e)[:100]}")
         
         if os.path.exists(FILE_NAME): os.remove(FILE_NAME)
