@@ -1,30 +1,26 @@
-name: Jazz Drive Uploader
+name: Jazz Drive 24/7 Bot
 
 on:
-  workflow_dispatch:
-    inputs:
-      link:
-        description: 'Direct Download Link Yahan Dalein'
-        required: true
+  workflow_dispatch: # Button dabane par start hoga
 
 jobs:
-  upload_job:
+  keep_alive:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Python Setup
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Tools Install
+      - name: Install Tools
         run: |
           pip install playwright pyTelegramBotAPI
           playwright install chromium
 
-      - name: Run Uploader
-        env:
-          FILE_LINK: ${{ github.event.inputs.link }}
-        run: python upload.py
+      - name: Run Bot Loop
+        run: |
+          # Yeh bot ko tab tak zinda rakhega jab tak upload poora na ho jaye
+          python upload.py
