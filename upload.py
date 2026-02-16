@@ -8,11 +8,14 @@ from playwright.sync_api import sync_playwright
 TOKEN = "8334787902:AAHrmpTxnBCmqhfCDBaAAdU4j7IB5Xdd1ks"
 chat_id = "7186647955" 
 bot = telebot.TeleBot(TOKEN)
-FILE_NAME = "jazz_file.mp4"
+FILE_NAME = "jazz_upload_file.mp4"
+
+user_input = {"state": "IDLE", "data": None}
 
 def take_screenshot(page, caption):
+    """PC ki screen ki photo khench kar Telegram bhejta hai"""
     try:
-        path = "screen.png"
+        path = "status.png"
         page.screenshot(path=path)
         with open(path, 'rb') as photo:
             bot.send_photo(chat_id, photo, caption=caption)
@@ -26,7 +29,12 @@ def handle_messages(message):
     if text.startswith('http') and user_input["state"] == "WAITING_FOR_LINK":
         user_input["data"] = text
         user_input["state"] = "LINK_RECEIVED"
-    # ... (Baqi login handlers wahi hain)
+    elif user_input["state"] == "WAITING_FOR_NUMBER":
+        user_input["data"] = text
+        user_input["state"] = "NUMBER_RECEIVED"
+    elif user_input["state"] == "WAITING_FOR_OTP":
+        user_input["data"] = text
+        user_input["state"] = "OTP_RECEIVED"
 
 def bot_polling():
     bot.polling(non_stop=True)
@@ -34,58 +42,79 @@ def bot_polling():
 threading.Thread(target=bot_polling, daemon=True).start()
 
 def main():
-    # ... (Link download wala hissa wahi rahega) ...
-    # Link aur Download ke baad:
+    global user_input
+    user_input["state"] = "WAITING_FOR_LINK"
+    bot.send_message(chat_id, "👋 Stable System + Live Progress Ready!\n🔗 Direct Link bhejein:")
+    while user_input["state"] != "LINK_RECEIVED": time.sleep(1)
     
+    link = user_input["data"]
+    bot.send_message(chat_id, "⏳ GitHub PC download kar raha hai...")
+    
+    # 📥 Stable download
+    os.system(f"curl -L -o {FILE_NAME} '{link}'")
+    bot.send_message(chat_id, "✅ Download Mukammal! Ab Jazz Drive par upload shuru ho raha hai...")
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
+        # Login state load karna
         context = browser.new_context(storage_state="state.json" if os.path.exists("state.json") else None)
         page = context.new_page()
         page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
         time.sleep(5)
 
-        # 🛡️ STEP 1: Cookie Banner Hatana (Jo aapki screen par hai)
+        # 🍪 Cookie Banner Hatana
         try:
-            cookie_btn = page.get_by_text("Accept All")
-            if cookie_btn.is_visible():
-                cookie_btn.click()
-                bot.send_message(chat_id, "🍪 Cookie banner hata diya gaya hai.")
+            if page.get_by_text("Accept All").is_visible():
+                page.get_by_text("Accept All").click()
         except: pass
 
-        # ... (Login check wahi rahega) ...
+        # 📱 Login Logic (Agar zaroorat ho)
+        if page.locator("//*[@id='msisdn']").is_visible():
+            user_input["state"] = "WAITING_FOR_NUMBER"
+            bot.send_message(chat_id, "📱 Jazz Number (03...) bhejein:")
+            while user_input["state"] != "NUMBER_RECEIVED": time.sleep(1)
+            page.locator("//*[@id='msisdn']").fill(user_input["data"])
+            page.locator("//*[@id='signinbtn']").first.click()
+            user_input["state"] = "WAITING_FOR_OTP"
+            bot.send_message(chat_id, "🔢 OTP bhejein:")
+            while user_input["state"] != "OTP_RECEIVED": time.sleep(1)
+            page.locator("//input[@aria-label='Digit 1']").press_sequentially(user_input["data"], delay=100)
+            time.sleep(5)
+            context.storage_state(path="state.json")
 
-        bot.send_message(chat_id, "🚀 1.2GB File Upload shuru ho rahi hai...")
+        # 🚀 Uploading with Live Screenshots
         try:
+            # File select karna
             page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
             
-            # 🔥 STEP 2: Bari file confirmation ka intezar (Yes Button)
-            bot.send_message(chat_id, "⏳ Confirmation pop-up ka intezar...")
-            time.sleep(10) # 1GB+ file ke liye thora extra wait
-            
-            take_screenshot(page, "📸 Checking for 'Yes' button...")
-            
+            # 🔥 1GB+ Confirmation
+            time.sleep(10) 
             yes_btn = page.get_by_text("Yes", exact=False)
             if yes_btn.is_visible():
+                take_screenshot(page, "⚠️ 1GB+ Alert: 'Yes' daba raha hoon.")
                 yes_btn.click()
-                bot.send_message(chat_id, "✅ 'Yes' par click kar diya! Ab upload start hai.")
             
-            # 🔥 STEP 3: Uploading Status (Har 5 min baad screenshot bhejega)
-            bot.send_message(chat_id, "🛰️ Bari file hai, background mein upload ho rahi hai. Main check karta rahunga...")
-            
-            # Jab tak completion text na aaye, wait karein
-            upload_done = False
-            while not upload_done:
+            bot.send_message(chat_id, "🛰️ Uploading jaari hai. Main har 2 min baad photo bhejunga...")
+
+            # 🔄 LIVE PROGRESS LOOP
+            upload_complete = False
+            while not upload_complete:
+                # Check karein ke kya upload khatam ho gaya?
                 if page.get_by_text("Uploads completed").is_visible():
-                    upload_done = True
+                    upload_complete = True
                 else:
-                    time.sleep(60) # Har 1 minute baad check karega
+                    # Agar nahi hua toh photo bhej kar wait karein
+                    take_screenshot(page, "🕒 Uploading Progress... (Abhi process chal raha hai)")
+                    time.sleep(120) # 2 minute ka intezar
             
             take_screenshot(page, "🎉 Upload Mukammal!")
-            bot.send_message(chat_id, "🎉 MUBARAK HO! File pohanch gayi.")
+            bot.send_message(chat_id, "🎉 MUBARAK HO! File Jazz Drive mein pohanch gayi.")
             
         except Exception as e:
+            take_screenshot(page, "❌ Error Screen")
             bot.send_message(chat_id, f"❌ Error: {str(e)[:100]}")
         
+        if os.path.exists(FILE_NAME): os.remove(FILE_NAME)
         browser.close()
 
 if __name__ == "__main__":
