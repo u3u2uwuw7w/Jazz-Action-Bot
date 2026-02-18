@@ -3,6 +3,7 @@ import time
 import threading
 import telebot
 from telebot import types
+from pytubefix import YouTube  # 🔥 NEW LIBRARY
 from playwright.sync_api import sync_playwright
 
 # 🔑 Details
@@ -11,7 +12,7 @@ chat_id = 7144917062
 bot = telebot.TeleBot(TOKEN)
 FILE_NAME = "jazz_upload_video.mp4"
 
-user_context = {"state": "IDLE", "link": None, "quality": None, "number": None, "otp": None}
+user_context = {"state": "IDLE", "link": None, "number": None, "otp": None}
 XPATH_ACCEPT_ALL = "//button[contains(text(), 'Accept All')]"
 
 def take_screenshot(page, caption):
@@ -25,7 +26,7 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "🍪 **LOGIN MODE ACTIVE**\n\nAb bot aapki ID use karke download karega (No Block). Link bhejein!")
+    bot.send_message(chat_id, "🛠️ **PYTUBEFIX MODE**\n\nNo Cookies needed. Direct Download. Link bhejein!")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
@@ -38,57 +39,32 @@ def handle_msg(message):
         user_context["state"] = "OTP_RECEIVED"
     elif "http" in text:
         user_context["link"] = text
-        if "youtube.com" in text or "youtu.be" in text:
-            # Quality Buttons
-            markup = types.InlineKeyboardMarkup()
-            markup.add(types.InlineKeyboardButton("360p", callback_data="360"), types.InlineKeyboardButton("720p", callback_data="720"))
-            markup.add(types.InlineKeyboardButton("Best", callback_data="best"))
-            bot.send_message(chat_id, "🎬 YouTube Quality select karein:", reply_markup=markup)
-        else:
-            bot.send_message(chat_id, "⚡ Direct Download shuru...")
-            threading.Thread(target=master_process, args=(text, "direct")).start()
+        bot.send_message(chat_id, "⚡ Processing Link...")
+        threading.Thread(target=master_process, args=(text,)).start()
 
-@bot.callback_query_handler(func=lambda call: True)
-def handle_query(call):
-    quality = call.data
-    bot.answer_callback_query(call.id, f"{quality} selected!")
-    threading.Thread(target=master_process, args=(user_context["link"], quality)).start()
-
-def master_process(link, quality):
+def master_process(link):
     try:
-        # 1. DOWNLOAD PHASE
-        bot.send_message(chat_id, f"📥 Downloading ({quality})...")
+        # 1. DOWNLOAD PHASE (PyTubeFix)
+        bot.send_message(chat_id, "📥 Downloading via PyTubeFix...")
         
-        if quality == "direct":
-            os.system(f"curl -L -o {FILE_NAME} '{link}'")
-        else:
-            # 🔥 COOKIES POWER
-            if os.path.exists("cookies.txt"):
-                bot.send_message(chat_id, "🍪 Cookies mil gayin! Official Access se download kar raha hoon...")
-                
-                # yt-dlp ko force karein ke wo cookies use kare
-                if quality == "best":
-                     cmd = f'yt-dlp --cookies cookies.txt -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
-                else:
-                     cmd = f'yt-dlp --cookies cookies.txt -f "bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={quality}]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
-                
-                exit_code = os.system(cmd)
-                
-                # Agar Cookies expire ho gayi hon to backup plan
-                if exit_code != 0 or not os.path.exists(FILE_NAME):
-                    bot.send_message(chat_id, "⚠️ Cookies expire ho sakti hain. Backup (Android Mode) try kar raha hoon...")
-                    cmd = cmd.replace("--cookies cookies.txt", "--extractor-args \"youtube:player_client=android\"")
-                    os.system(cmd)
-            else:
-                bot.send_message(chat_id, "❌ Error: 'cookies.txt' file nahi mili! Pehle file upload karein.")
+        if "youtube.com" in link or "youtu.be" in link:
+            try:
+                yt = YouTube(link)
+                # Sab se acha MP4 stream jo available ho (Max 720p usually)
+                stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
+                stream.download(filename="jazz_upload_video.mp4")
+            except Exception as e:
+                bot.send_message(chat_id, f"❌ PyTube Error: {str(e)}")
                 return
+        else:
+            # Direct Link
+            os.system(f"curl -L -o {FILE_NAME} '{link}'")
 
-        # File Check
-        if not os.path.exists(FILE_NAME) or os.path.getsize(FILE_NAME) < 1000:
-            bot.send_message(chat_id, "❌ Download Fail. Cookies dobara check karein.")
+        if not os.path.exists(FILE_NAME):
+            bot.send_message(chat_id, "❌ File download nahi hui.")
             return
         
-        # 2. UPLOAD PHASE (Jazz Drive)
+        # 2. UPLOAD PHASE
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(viewport={'width': 1280, 'height': 720}, storage_state="state.json" if os.path.exists("state.json") else None)
