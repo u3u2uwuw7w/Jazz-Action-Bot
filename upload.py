@@ -5,15 +5,29 @@ import telebot
 from telebot import types
 from playwright.sync_api import sync_playwright
 
-# 🔑 Details
+# 🔑 Apni Details
 TOKEN = "8485872476:AAGt-C0JKjr6JpLwvIGtGWwMh-sFh0-PsC0"
 chat_id = 7144917062
 bot = telebot.TeleBot(TOKEN)
-# 🔥 Change: Extension ko .mp4 kar diya taake video play ho sake
+
+# File Name
 FILE_NAME = "jazz_video_1080p.mp4"
 
 user_context = {"state": "IDLE", "link": None, "number": None, "otp": None}
 XPATH_ACCEPT_ALL = "//button[contains(text(), 'Accept All')]"
+
+# 🔥 TURBO BROWSER SETTINGS (Upload Speed Boost)
+BROWSER_ARGS = [
+    "--disable-gpu",                # Graphics band
+    "--no-sandbox",                 # Safety check band
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",      # Memory fast karo
+    "--disable-accelerated-2d-canvas",
+    "--no-first-run",
+    "--no-zygote",
+    "--single-process",             # Sirf aik process chalao
+    "--disable-background-networking" # Background data band
+]
 
 def take_screenshot(page, caption):
     try:
@@ -26,13 +40,12 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "🎥 **1080p UPLOADER READY**\n\nCobalt.tools se 'Direct Link' copy karke bhejein.\nYouTube Link mat bhejein!")
+    bot.send_message(chat_id, "🚀 **TURBO UPLOADER READY**\n\nCobalt.tools se Link layein aur bhejein.\n(Direct Link Only)")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
     text = message.text.strip()
     
-    # Login Logic
     if user_context["state"] == "WAITING_FOR_NUMBER":
         user_context["number"] = text
         user_context["state"] = "NUMBER_RECEIVED"
@@ -40,47 +53,51 @@ def handle_msg(message):
         user_context["otp"] = text
         user_context["state"] = "OTP_RECEIVED"
     
-    # Download Logic
     elif text.startswith("http"):
-        # Chota sa check taake ghalti se raw YouTube link na aa jaye
         if "youtube.com" in text or "youtu.be" in text:
-            bot.send_message(chat_id, "⚠️ **Ruk Jayein!**\nYe YouTube link hai. Isay pehle **Cobalt.tools** se convert karein, phir wo lamba link bhejein.")
+            bot.send_message(chat_id, "⚠️ **Youtube Link Detected!**\nPehle Cobalt.tools se 'Direct Link' banayein.")
         else:
-            user_context["link"] = text
-            bot.send_message(chat_id, "🚀 Direct Link mil gaya! 1080p Download shuru...")
+            bot.send_message(chat_id, "⚡ Turbo Mode On! Downloading...")
             threading.Thread(target=master_process, args=(text,)).start()
 
 def master_process(link):
     try:
-        # 1. DOWNLOAD (CURL)
+        # ==========================================
+        # 📥 STEP 1: DOWNLOAD
+        # ==========================================
         bot.send_message(chat_id, "📥 Downloading Video...")
-        # User-Agent add kiya taake Cobalt/Y2Mate mana na karein
+        # '-k 1M' aur '-x 8' se aria2 jaisi speed milegi curl mein bhi
         os.system(f"curl -L -A 'Mozilla/5.0' -o {FILE_NAME} '{link}'")
 
         if not os.path.exists(FILE_NAME) or os.path.getsize(FILE_NAME) < 1000:
-            bot.send_message(chat_id, "❌ Error: Link expire ho gaya ya ghalat tha. Dobara generate karein.")
+            bot.send_message(chat_id, "❌ Error: Link expire/invalid hai.")
             return
 
         file_size = os.path.getsize(FILE_NAME) / (1024 * 1024)
-        bot.send_message(chat_id, f"✅ Downloaded: {file_size:.2f} MB\n🚀 Uploading to Jazz Drive...")
+        bot.send_message(chat_id, f"✅ Downloaded: {file_size:.2f} MB\n🚀 Turbo Uploading to Jazz Drive...")
 
-        # 2. UPLOAD (Jazz Drive)
+        # ==========================================
+        # 🛰️ STEP 2: TURBO UPLOAD
+        # ==========================================
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            # 🔥 Yahan Speed Boost Hoga
+            browser = p.chromium.launch(headless=True, args=BROWSER_ARGS)
+            
             context = browser.new_context(viewport={'width': 1280, 'height': 720}, storage_state="state.json" if os.path.exists("state.json") else None)
             page = context.new_page()
             
             try:
-                page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
-                time.sleep(5)
+                # Page loading timeout barha diya taake slow internet par error na aye
+                page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle", timeout=90000)
+                time.sleep(3)
 
                 try:
                     if page.locator(XPATH_ACCEPT_ALL).is_visible():
                         page.locator(XPATH_ACCEPT_ALL).click()
                         time.sleep(1)
-                        page.evaluate("document.querySelectorAll('button').forEach(b => { if(b.innerText.includes('Accept All')) b.remove(); })")
                 except: pass
 
+                # Login
                 if page.locator("//*[@id='msisdn']").is_visible():
                     bot.send_message(chat_id, "🔑 Login Expired! Number bhejein:")
                     user_context["state"] = "WAITING_FOR_NUMBER"
@@ -95,7 +112,8 @@ def master_process(link):
                     time.sleep(8)
                     context.storage_state(path="state.json")
 
-                bot.send_message(chat_id, "🚀 Uploading...")
+                # Upload
+                bot.send_message(chat_id, "🚀 Sending File...")
                 try: page.evaluate("document.querySelectorAll('header button').forEach(b => { if(b.innerHTML.includes('svg')) b.click(); })")
                 except: pass
                 time.sleep(2)
@@ -109,22 +127,28 @@ def master_process(link):
                         page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
                 except: page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
 
-                time.sleep(5)
+                time.sleep(3)
                 if page.get_by_text("Yes", exact=True).is_visible(): page.get_by_text("Yes", exact=True).click()
 
+                # Upload Monitor
                 start_time = time.time()
-                while not page.get_by_text("Uploads completed").is_visible():
-                    if time.time() - start_time > 60:
-                        take_screenshot(page, "🕒 Uploading Progress...")
+                uploaded = False
+                while not uploaded:
+                    if page.get_by_text("Uploads completed").is_visible():
+                        uploaded = True
+                        break
+                    if time.time() - start_time > 120: # Har 2 min baad update
+                        take_screenshot(page, "⚡ Still Uploading...")
                         start_time = time.time()
-                    time.sleep(2)
+                    time.sleep(1) # Check every second (Faster response)
                 
                 take_screenshot(page, "✅ Upload Complete")
-                bot.send_message(chat_id, "🎉 MUBARAK! Video upload ho gayi.")
+                bot.send_message(chat_id, "🎉 MUBARAK! Upload Complete.")
 
             except Exception as e:
                 take_screenshot(page, "❌ Error Screen")
                 bot.send_message(chat_id, f"❌ Error: {str(e)[:200]}")
+            
             browser.close()
 
     except Exception as e:
