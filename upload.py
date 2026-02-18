@@ -5,15 +5,16 @@ import telebot
 from telebot import types
 from playwright.sync_api import sync_playwright
 
-# 🔑 Details (Fixed)
+# 🔑 Details
 TOKEN = "8485872476:AAGt-C0JKjr6JpLwvIGtGWwMh-sFh0-PsC0"
 chat_id = 7144917062
 bot = telebot.TeleBot(TOKEN)
-FILE_NAME = "jazz_upload.mp4"
+FILE_NAME = "jazz_upload_video.mp4"
 
 user_context = {"state": "IDLE", "link": None, "quality": None, "number": None, "otp": None}
 
 def take_screenshot(page, caption):
+    """Screen ki photo khench kar bhejne ka function"""
     try:
         path = "status.png"
         page.screenshot(path=path)
@@ -24,11 +25,12 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "🚀 **JAZZ DRIVE MASTER BOT (V3)** 🚀\n\nAb link bhejein. Menu ka masla hal kar diya hai!")
+    bot.send_message(chat_id, "📸 **ERROR SCREENSHOT SYSTEM ACTIVE**\n\nAb agar koi error aaya toh main photo bhejunga. Link bhejein!")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
     text = message.text.strip()
+    
     if user_context["state"] == "WAITING_FOR_NUMBER":
         user_context["number"] = text
         user_context["state"] = "NUMBER_RECEIVED"
@@ -54,7 +56,7 @@ def handle_query(call):
 def master_process(link, quality):
     try:
         # 1. DOWNLOAD
-        bot.send_message(chat_id, f"📥 {quality} download ho raha hai...")
+        bot.send_message(chat_id, f"📥 Downloading ({quality})...")
         if quality == "best":
             os.system(f"curl -L -o {FILE_NAME} '{link}'")
         else:
@@ -67,59 +69,75 @@ def master_process(link, quality):
         # 2. UPLOAD
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            context = browser.new_context(storage_state="state.json" if os.path.exists("state.json") else None)
+            context = browser.new_context(
+                viewport={'width': 1280, 'height': 720},
+                storage_state="state.json" if os.path.exists("state.json") else None
+            )
             page = context.new_page()
-            page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
-            time.sleep(5)
-
-            # 🛡️ ZABARDASTI COOKIE BANNER HATANA
-            page.evaluate("document.querySelectorAll('button').forEach(b => { if(b.innerText.includes('Accept All')) b.click(); })")
-            time.sleep(2)
-
-            # Login logic
-            if page.locator("//*[@id='msisdn']").is_visible():
-                bot.send_message(chat_id, "🔑 Login expire ho gaya! Number bhejein:")
-                user_context["state"] = "WAITING_FOR_NUMBER"
-                while user_context["state"] != "NUMBER_RECEIVED": time.sleep(1)
-                page.locator("//*[@id='msisdn']").fill(user_context["number"])
-                page.locator("//*[@id='signinbtn']").first.click()
-                bot.send_message(chat_id, "🔢 OTP bhejein:")
-                user_context["state"] = "WAITING_FOR_OTP"
-                while user_context["state"] != "OTP_RECEIVED": time.sleep(1)
-                page.locator("//input[@aria-label='Digit 1']").press_sequentially(user_context["otp"], delay=100)
-                time.sleep(8)
-                context.storage_state(path="state.json")
-
-            # 🚀 NEW UPLOAD STRATEGY (Direct Input)
-            bot.send_message(chat_id, "🚀 Uploading shuru ho rahi hai...")
+            
             try:
-                # Menu kholne ki koshish (Colab Logic)
-                page.evaluate("document.querySelectorAll('header button').forEach(b => { if(b.innerHTML.includes('svg')) b.click(); })")
-                time.sleep(2)
+                page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
+                time.sleep(5)
+
+                # Cookie Banner
+                try: page.get_by_text("Accept All").click(timeout=3000)
+                except: pass
+
+                # Login Check
+                if page.locator("//*[@id='msisdn']").is_visible():
+                    take_screenshot(page, "🔑 Login Required Screen")
+                    bot.send_message(chat_id, "🔑 Login Expired! Number (03...) bhejein:")
+                    
+                    user_context["state"] = "WAITING_FOR_NUMBER"
+                    while user_context["state"] != "NUMBER_RECEIVED": time.sleep(1)
+                    page.locator("//*[@id='msisdn']").fill(user_context["number"])
+                    page.locator("//*[@id='signinbtn']").first.click()
+                    
+                    bot.send_message(chat_id, "🔢 OTP bhejein:")
+                    user_context["state"] = "WAITING_FOR_OTP"
+                    while user_context["state"] != "OTP_RECEIVED": time.sleep(1)
+                    page.locator("//input[@aria-label='Digit 1']").press_sequentially(user_context["otp"], delay=100)
+                    time.sleep(8)
+                    context.storage_state(path="state.json")
+
+                # Upload Start
+                bot.send_message(chat_id, "🚀 Uploading shuru...")
                 
-                # Agar menu mil jaye toh click karein, warna direct attach karein
+                # Menu Icon Click
+                page.evaluate("document.querySelectorAll('header button').forEach(b => { if(b.innerHTML.includes('svg')) b.click(); })")
+                time.sleep(3)
+                
+                # File Selection
                 if page.locator("div[role='dialog']").is_visible(timeout=5000):
                     with page.expect_file_chooser() as fc_info:
                         page.locator("div[role='dialog'] >> text=/upload files/i").first.click(force=True)
                     fc_info.value.set_files(os.path.abspath(FILE_NAME))
                 else:
-                    raise Exception("Menu not found")
-            except:
-                # 🛠️ FALLBACK: Direct hidden input use karna
-                bot.send_message(chat_id, "⚠️ Menu nahi khula, Direct path se upload kar raha hoon...")
-                page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
+                    # Fallback method
+                    page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
 
-            # 1GB+ Bypass
-            time.sleep(5)
-            if page.get_by_text("Yes", exact=True).is_visible(): page.get_by_text("Yes", exact=True).click()
+                # 1GB+ Bypass
+                time.sleep(5)
+                if page.get_by_text("Yes", exact=True).is_visible(): 
+                    page.get_by_text("Yes", exact=True).click()
+                    bot.send_message(chat_id, "✅ Large File 'Yes' clicked.")
 
-            # Final Progress
-            page.get_by_text("Uploads completed", timeout=0).wait_for(state="visible")
-            bot.send_message(chat_id, "🎉 MUBARAK! File upload ho gayi.")
+                # Wait for completion (Corrected Syntax)
+                bot.send_message(chat_id, "⏳ Uploading in progress...")
+                page.get_by_text("Uploads completed").wait_for(state="visible", timeout=0)
+                
+                take_screenshot(page, "✅ Upload Complete Screen")
+                bot.send_message(chat_id, "🎉 MUBARAK! File upload ho gayi.")
+
+            except Exception as e:
+                # 🔥 ERROR SCREENSHOT FEATURE 🔥
+                take_screenshot(page, "❌ Error ke waqt ki screen")
+                bot.send_message(chat_id, f"❌ Error Log: {str(e)[:200]}")
+            
             browser.close()
 
     except Exception as e:
-        bot.send_message(chat_id, f"❌ Error: {str(e)[:100]}")
+        bot.send_message(chat_id, f"❌ Critical Error: {str(e)[:100]}")
     finally:
         if os.path.exists(FILE_NAME): os.remove(FILE_NAME)
         user_context["state"] = "IDLE"
