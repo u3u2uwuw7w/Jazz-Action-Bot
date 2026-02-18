@@ -1,7 +1,7 @@
 name: Jazz Drive Multi-Bot 24/7
 
 on:
-  workflow_dispatch: # Koi input nahi, bas button dabao
+  workflow_dispatch:
 
 jobs:
   run_bot:
@@ -20,16 +20,15 @@ jobs:
           playwright install chromium
           sudo apt-get install ffmpeg -y
 
-      - name: Run Bot
-        # Bot ko hamesha ke liye on rakhne ke liye
+      - name: Run Bot Loop
         run: python upload.py
 
+      # 🔥 LOGIN SESSION KO REPOSITORY MEIN SAVE KARNA
       - name: Save Login Session
         if: always()
         run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action Bot"
+          git config --global user.email "bot@github.com"
           git add state.json
-          git commit -m "Updated Login Session" || exit 0
+          git commit -m "Update login session" || exit 0
           git push
-          
