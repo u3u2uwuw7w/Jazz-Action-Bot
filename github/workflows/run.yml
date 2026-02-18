@@ -1,10 +1,10 @@
-name: Jazz Drive 24/7 Multi-Bot
+name: Jazz Drive Multi-Bot
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Ab yahan koi input ki zaroorat nahi
 
 jobs:
-  run_job:
+  run_bot:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -18,16 +18,17 @@ jobs:
         run: |
           pip install playwright pyTelegramBotAPI yt-dlp
           playwright install chromium
+          sudo apt-get install ffmpeg -y
 
       - name: Run Bot
         run: python upload.py
 
-      # 🔥 SESSION KO REPO MEIN SAVE KARNA
-      - name: Auto-Save Session
+      # 🔥 LOGIN SAVE KARNA (Git Push)
+      - name: Save Session Permanently
         if: always()
         run: |
-          git config --global user.name "GitHub Bot"
-          git config --global user.email "bot@github.com"
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
           git add state.json
           git commit -m "Updated Login Session" || exit 0
           git push
