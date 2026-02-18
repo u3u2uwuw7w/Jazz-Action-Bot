@@ -9,7 +9,8 @@ from playwright.sync_api import sync_playwright
 TOKEN = "8485872476:AAGt-C0JKjr6JpLwvIGtGWwMh-sFh0-PsC0"
 chat_id = 7144917062
 bot = telebot.TeleBot(TOKEN)
-FILE_NAME = "jazz_upload_video.mp4"
+# 🔥 Change: Extension ko .mp4 kar diya taake video play ho sake
+FILE_NAME = "jazz_video_1080p.mp4"
 
 user_context = {"state": "IDLE", "link": None, "number": None, "otp": None}
 XPATH_ACCEPT_ALL = "//button[contains(text(), 'Accept All')]"
@@ -25,85 +26,45 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "🛡️ **COBALT WEB BYPASS**\n\nYouTube IP Block ko bypass karne ke liye main Cobalt Website use karunga. Link bhejein!")
+    bot.send_message(chat_id, "🎥 **1080p UPLOADER READY**\n\nCobalt.tools se 'Direct Link' copy karke bhejein.\nYouTube Link mat bhejein!")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
     text = message.text.strip()
+    
+    # Login Logic
     if user_context["state"] == "WAITING_FOR_NUMBER":
         user_context["number"] = text
         user_context["state"] = "NUMBER_RECEIVED"
     elif user_context["state"] == "WAITING_FOR_OTP":
         user_context["otp"] = text
         user_context["state"] = "OTP_RECEIVED"
-    elif "http" in text:
-        user_context["link"] = text
+    
+    # Download Logic
+    elif text.startswith("http"):
+        # Chota sa check taake ghalti se raw YouTube link na aa jaye
         if "youtube.com" in text or "youtu.be" in text:
-            bot.send_message(chat_id, "🔄 Cobalt Web se file nikaal raha hoon...")
-            threading.Thread(target=master_process, args=(text, "cobalt_web")).start()
+            bot.send_message(chat_id, "⚠️ **Ruk Jayein!**\nYe YouTube link hai. Isay pehle **Cobalt.tools** se convert karein, phir wo lamba link bhejein.")
         else:
-            bot.send_message(chat_id, "⚡ Direct Download shuru...")
-            threading.Thread(target=master_process, args=(text, "direct")).start()
+            user_context["link"] = text
+            bot.send_message(chat_id, "🚀 Direct Link mil gaya! 1080p Download shuru...")
+            threading.Thread(target=master_process, args=(text,)).start()
 
-def download_via_cobalt_web(url):
-    """
-    Ye function Cobalt ki website par ja kar file download karega.
-    """
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        try:
-            print("Opening Cobalt Tools...")
-            page.goto("https://cobalt.tools/", timeout=60000)
-            
-            # Link Paste
-            # Cobalt ka input box dhoond kar link likhna
-            page.get_by_placeholder("paste link").fill(url)
-            time.sleep(1)
-            
-            # Enter dabana (Search start)
-            page.keyboard.press("Enter")
-            
-            # Download start hone ka intezar
-            print("Waiting for download...")
-            with page.expect_download(timeout=60000) as download_info:
-                # Kabhi kabhi auto start hota hai, kabhi button click karna parta hai
-                # Agar 5 second mein start na ho to '>>' button dabao
-                time.sleep(2)
-                # Backup click if auto-download doesn't start
-                try: page.locator("button[aria-label='download']").click()
-                except: pass
-            
-            download = download_info.value
-            download.save_as(FILE_NAME)
-            print("Download Complete!")
-            return True
-
-        except Exception as e:
-            print(f"Cobalt Web Error: {e}")
-            return False
-        finally:
-            browser.close()
-
-def master_process(link, method):
+def master_process(link):
     try:
-        # 1. DOWNLOAD PHASE
-        success = False
-        
-        if method == "cobalt_web":
-            success = download_via_cobalt_web(link)
-        else:
-            os.system(f"curl -L -o {FILE_NAME} '{link}'")
-            success = True
+        # 1. DOWNLOAD (CURL)
+        bot.send_message(chat_id, "📥 Downloading Video...")
+        # User-Agent add kiya taake Cobalt/Y2Mate mana na karein
+        os.system(f"curl -L -A 'Mozilla/5.0' -o {FILE_NAME} '{link}'")
 
-        if not success or not os.path.exists(FILE_NAME) or os.path.getsize(FILE_NAME) < 1000:
-            bot.send_message(chat_id, "❌ Error: Download fail hua. Shayad Cobalt bhi busy hai.")
+        if not os.path.exists(FILE_NAME) or os.path.getsize(FILE_NAME) < 1000:
+            bot.send_message(chat_id, "❌ Error: Link expire ho gaya ya ghalat tha. Dobara generate karein.")
             return
 
         file_size = os.path.getsize(FILE_NAME) / (1024 * 1024)
-        bot.send_message(chat_id, f"✅ File Downloaded ({file_size:.2f} MB). Uploading to Jazz...")
+        bot.send_message(chat_id, f"✅ Downloaded: {file_size:.2f} MB\n🚀 Uploading to Jazz Drive...")
 
-        # 2. UPLOAD PHASE (Jazz Drive)
+        # 2. UPLOAD (Jazz Drive)
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(viewport={'width': 1280, 'height': 720}, storage_state="state.json" if os.path.exists("state.json") else None)
@@ -159,7 +120,7 @@ def master_process(link, method):
                     time.sleep(2)
                 
                 take_screenshot(page, "✅ Upload Complete")
-                bot.send_message(chat_id, "🎉 MUBARAK! File upload ho gayi.")
+                bot.send_message(chat_id, "🎉 MUBARAK! Video upload ho gayi.")
 
             except Exception as e:
                 take_screenshot(page, "❌ Error Screen")
