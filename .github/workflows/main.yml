@@ -1,4 +1,4 @@
-name: Jazz Drive TV Mode
+lname: Jazz Drive API Bot
 
 on:
   workflow_dispatch:
@@ -18,9 +18,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          pip install playwright pyTelegramBotAPI
-          # Install Latest yt-dlp from Master
-          pip install --force-reinstall https://github.com/yt-dlp/yt-dlp/archive/master.zip
+          # Requests library zaroori hai API ke liye
+          pip install playwright pyTelegramBotAPI requests
           playwright install chromium
 
       - name: Run Bot
