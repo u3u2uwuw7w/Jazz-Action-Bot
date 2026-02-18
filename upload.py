@@ -5,7 +5,7 @@ import telebot
 from telebot import types
 from playwright.sync_api import sync_playwright
 
-# 🔑 Details
+# 🔑 Details (Fixed)
 TOKEN = "8485872476:AAGt-C0JKjr6JpLwvIGtGWwMh-sFh0-PsC0"
 chat_id = 7144917062
 bot = telebot.TeleBot(TOKEN)
@@ -13,8 +13,12 @@ FILE_NAME = "jazz_upload_video.mp4"
 
 user_context = {"state": "IDLE", "link": None, "quality": None, "number": None, "otp": None}
 
+# 🎯 YOUR XPATHS (From Screenshot)
+XPATH_ACCEPT_ALL = "//button[contains(text(), 'Accept All')]"
+XPATH_UPLOAD_BUTTON_1 = "//header//button[contains(., 'upload') or .//*[name()='svg']]" 
+XPATH_UPLOAD_FILES_OPTION = "//li[contains(., 'Upload files') or contains(., 'upload files')]"
+
 def take_screenshot(page, caption):
-    """Screen ki photo khench kar bhejne ka function"""
     try:
         path = "status.png"
         page.screenshot(path=path)
@@ -25,12 +29,11 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "🎥 **LIVE VIEW BOT ONLINE**\n\nAb main chup nahi rahoonga, har minute progress dikhaunga. Link bhejein!")
+    bot.send_message(chat_id, "🚀 **XPATH MASTER BOT ONLINE**\n\nAb ye Exact Buttons par click karega. Link bhejein!")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
     text = message.text.strip()
-    
     if user_context["state"] == "WAITING_FOR_NUMBER":
         user_context["number"] = text
         user_context["state"] = "NUMBER_RECEIVED"
@@ -69,18 +72,20 @@ def master_process(link, quality):
         # 2. UPLOAD
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            context = browser.new_context(
-                viewport={'width': 1280, 'height': 720},
-                storage_state="state.json" if os.path.exists("state.json") else None
-            )
+            context = browser.new_context(viewport={'width': 1280, 'height': 720}, storage_state="state.json" if os.path.exists("state.json") else None)
             page = context.new_page()
             
             try:
                 page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
                 time.sleep(5)
 
-                # Cookie Banner
-                try: page.get_by_text("Accept All").click(timeout=3000)
+                # 🛡️ STEP 1: COOKIE BANNER REMOVAL (Using XPath)
+                try:
+                    if page.locator(XPATH_ACCEPT_ALL).is_visible():
+                        page.locator(XPATH_ACCEPT_ALL).click()
+                        time.sleep(1)
+                        # Double check: Remove from DOM if still there
+                        page.evaluate("document.querySelectorAll('button').forEach(b => { if(b.innerText.includes('Accept All')) b.remove(); })")
                 except: pass
 
                 # Login Check
@@ -98,40 +103,50 @@ def master_process(link, quality):
                     time.sleep(8)
                     context.storage_state(path="state.json")
 
-                # Upload Start
-                bot.send_message(chat_id, "🚀 Uploading shuru...")
+                # 🚀 STEP 2: UPLOAD PROCESS
+                bot.send_message(chat_id, "🚀 Upload Menu dhoond raha hoon...")
                 
-                # Menu Icon Click
-                page.evaluate("document.querySelectorAll('header button').forEach(b => { if(b.innerHTML.includes('svg')) b.click(); })")
-                time.sleep(3)
+                # Koshish 1: Header Button Click (Generic XPath)
+                try:
+                    page.locator("header button").filter(has_text="cloud_upload").click() 
+                except:
+                    # Alternative: Click any button with SVG in header
+                    page.evaluate("document.querySelectorAll('header button').forEach(b => { if(b.innerHTML.includes('svg')) b.click(); })")
                 
-                # File Selection
-                if page.locator("div[role='dialog']").is_visible(timeout=5000):
-                    with page.expect_file_chooser() as fc_info:
-                        page.locator("div[role='dialog'] >> text=/upload files/i").first.click(force=True)
-                    fc_info.value.set_files(os.path.abspath(FILE_NAME))
-                else:
+                time.sleep(2)
+
+                # Koshish 2: Select 'Upload files' from Menu
+                file_attached = False
+                try:
+                    if page.locator("div[role='dialog']").is_visible():
+                        with page.expect_file_chooser() as fc_info:
+                            page.locator("div[role='dialog'] >> text=/upload files/i").first.click()
+                        fc_info.value.set_files(os.path.abspath(FILE_NAME))
+                        file_attached = True
+                    else:
+                        raise Exception("Menu not visible")
+                except:
+                    # Koshish 3: Direct Input (Fallback)
+                    bot.send_message(chat_id, "⚠️ Menu nahi khula, Direct Input use kar raha hoon...")
                     page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
+                    file_attached = True
 
                 # 1GB+ Bypass
                 time.sleep(5)
                 if page.get_by_text("Yes", exact=True).is_visible(): 
                     page.get_by_text("Yes", exact=True).click()
-                    bot.send_message(chat_id, "✅ Large File Detected & Accepted.")
+                    bot.send_message(chat_id, "✅ Large File 'Yes' clicked.")
 
-                # 🔥 LIVE MONITORING LOOP (Ye naya hai)
-                bot.send_message(chat_id, "👀 Monitoring Active: Har 1 min baad photo aayegi...")
-                
+                # 🔥 MONITORING
+                bot.send_message(chat_id, "👀 Monitoring Started... Screenshot ka intezar karein.")
                 start_time = time.time()
                 while not page.get_by_text("Uploads completed").is_visible():
-                    # Har 60 seconds baad screenshot
                     if time.time() - start_time > 60:
                         take_screenshot(page, "🕒 Uploading Progress...")
-                        start_time = time.time() # Timer reset
-                    
-                    time.sleep(2) # CPU relax
+                        start_time = time.time()
+                    time.sleep(2)
                 
-                take_screenshot(page, "✅ Upload Complete Screen")
+                take_screenshot(page, "✅ Upload Complete")
                 bot.send_message(chat_id, "🎉 MUBARAK! File upload ho gayi.")
 
             except Exception as e:
