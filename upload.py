@@ -25,7 +25,7 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "🌍 **BROWSER BYPASS BOT READY**\n\nAb main websites ke zariye link nikalunga. 100% Working! Link bhejein.")
+    bot.send_message(chat_id, "🍪 **LOGIN MODE ACTIVE**\n\nAb bot aapki ID use karke download karega (No Block). Link bhejein!")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
@@ -38,81 +38,57 @@ def handle_msg(message):
         user_context["state"] = "OTP_RECEIVED"
     elif "http" in text:
         user_context["link"] = text
-        # Direct Quality Check
         if "youtube.com" in text or "youtu.be" in text:
-            bot.send_message(chat_id, "🔍 Website se link nikaal raha hoon (Video)...")
-            threading.Thread(target=master_process, args=(text, "website")).start()
+            # Quality Buttons
+            markup = types.InlineKeyboardMarkup()
+            markup.add(types.InlineKeyboardButton("360p", callback_data="360"), types.InlineKeyboardButton("720p", callback_data="720"))
+            markup.add(types.InlineKeyboardButton("Best", callback_data="best"))
+            bot.send_message(chat_id, "🎬 YouTube Quality select karein:", reply_markup=markup)
         else:
             bot.send_message(chat_id, "⚡ Direct Download shuru...")
             threading.Thread(target=master_process, args=(text, "direct")).start()
 
-def get_link_via_browser(url):
-    """
-    Ye function Playwright ke zariye downloader websites visit karega.
-    """
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        try:
-            # 🟢 METHOD 1: Publer.io (Clean & Fast)
-            page = browser.new_page()
-            print("Trying Publer...")
-            page.goto("https://publer.io/tools/youtube-downloader", timeout=60000)
-            page.fill("input[name='url']", url)
-            page.click("button[type='submit']")
-            # Wait for download button
-            try:
-                page.wait_for_selector("a[download]", timeout=15000)
-                # Get the link of the first download button (usually highest quality)
-                download_url = page.eval_on_selector("a[download]", "el => el.href")
-                if download_url: return download_url
-            except:
-                print("Publer fail, trying next...")
+@bot.callback_query_handler(func=lambda call: True)
+def handle_query(call):
+    quality = call.data
+    bot.answer_callback_query(call.id, f"{quality} selected!")
+    threading.Thread(target=master_process, args=(user_context["link"], quality)).start()
 
-            # 🟡 METHOD 2: 10Downloader (Backup)
-            page = browser.new_page()
-            print("Trying 10Downloader...")
-            page.goto("https://10downloader.com/en/1", timeout=60000)
-            page.fill("#url", url)
-            page.click(".btn-action")
-            # Wait for links
-            try:
-                page.wait_for_selector(".download-item", timeout=20000)
-                # Extract first MP4 link
-                download_url = page.get_attribute(".download-item a", "href")
-                if download_url: return download_url
-            except:
-                print("10Downloader fail.")
-            
-        except Exception as e:
-            print(f"Browser Error: {e}")
-        finally:
-            browser.close()
-    return None
-
-def master_process(link, method):
+def master_process(link, quality):
     try:
-        download_url = ""
+        # 1. DOWNLOAD PHASE
+        bot.send_message(chat_id, f"📥 Downloading ({quality})...")
         
-        # 1. LINK FETCHING
-        if method == "direct":
-            download_url = link
+        if quality == "direct":
+            os.system(f"curl -L -o {FILE_NAME} '{link}'")
         else:
-            final_link = get_link_via_browser(link)
-            if final_link:
-                download_url = final_link
-                bot.send_message(chat_id, "✅ Link mil gaya! Downloading...")
+            # 🔥 COOKIES POWER
+            if os.path.exists("cookies.txt"):
+                bot.send_message(chat_id, "🍪 Cookies mil gayin! Official Access se download kar raha hoon...")
+                
+                # yt-dlp ko force karein ke wo cookies use kare
+                if quality == "best":
+                     cmd = f'yt-dlp --cookies cookies.txt -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
+                else:
+                     cmd = f'yt-dlp --cookies cookies.txt -f "bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={quality}]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
+                
+                exit_code = os.system(cmd)
+                
+                # Agar Cookies expire ho gayi hon to backup plan
+                if exit_code != 0 or not os.path.exists(FILE_NAME):
+                    bot.send_message(chat_id, "⚠️ Cookies expire ho sakti hain. Backup (Android Mode) try kar raha hoon...")
+                    cmd = cmd.replace("--cookies cookies.txt", "--extractor-args \"youtube:player_client=android\"")
+                    os.system(cmd)
             else:
-                bot.send_message(chat_id, "❌ Error: Kisi bhi website se link nahi mila. Video private ho sakti hai.")
+                bot.send_message(chat_id, "❌ Error: 'cookies.txt' file nahi mili! Pehle file upload karein.")
                 return
 
-        # 2. DOWNLOAD (CURL)
-        os.system(f"curl -L -o {FILE_NAME} '{download_url}'")
-
+        # File Check
         if not os.path.exists(FILE_NAME) or os.path.getsize(FILE_NAME) < 1000:
-            bot.send_message(chat_id, "❌ Error: Download fail hua (File empty).")
+            bot.send_message(chat_id, "❌ Download Fail. Cookies dobara check karein.")
             return
         
-        # 3. UPLOAD (JAZZ DRIVE)
+        # 2. UPLOAD PHASE (Jazz Drive)
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(viewport={'width': 1280, 'height': 720}, storage_state="state.json" if os.path.exists("state.json") else None)
@@ -122,7 +98,6 @@ def master_process(link, method):
                 page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
                 time.sleep(5)
 
-                # Cookie Banner
                 try:
                     if page.locator(XPATH_ACCEPT_ALL).is_visible():
                         page.locator(XPATH_ACCEPT_ALL).click()
@@ -130,9 +105,8 @@ def master_process(link, method):
                         page.evaluate("document.querySelectorAll('button').forEach(b => { if(b.innerText.includes('Accept All')) b.remove(); })")
                 except: pass
 
-                # Login Check
                 if page.locator("//*[@id='msisdn']").is_visible():
-                    bot.send_message(chat_id, "🔑 Login Expired! Number (03...) bhejein:")
+                    bot.send_message(chat_id, "🔑 Login Expired! Number bhejein:")
                     user_context["state"] = "WAITING_FOR_NUMBER"
                     while user_context["state"] != "NUMBER_RECEIVED": time.sleep(1)
                     page.locator("//*[@id='msisdn']").fill(user_context["number"])
@@ -145,10 +119,8 @@ def master_process(link, method):
                     time.sleep(8)
                     context.storage_state(path="state.json")
 
-                # Upload Logic
-                bot.send_message(chat_id, "🚀 Uploading shuru...")
-                try:
-                    page.evaluate("document.querySelectorAll('header button').forEach(b => { if(b.innerHTML.includes('svg')) b.click(); })")
+                bot.send_message(chat_id, "🚀 Uploading...")
+                try: page.evaluate("document.querySelectorAll('header button').forEach(b => { if(b.innerHTML.includes('svg')) b.click(); })")
                 except: pass
                 time.sleep(2)
 
@@ -159,15 +131,11 @@ def master_process(link, method):
                         fc_info.value.set_files(os.path.abspath(FILE_NAME))
                     else:
                         page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
-                except:
-                     page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
+                except: page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
 
                 time.sleep(5)
-                # 1GB+ Fix
-                if page.get_by_text("Yes", exact=True).is_visible(): 
-                    page.get_by_text("Yes", exact=True).click()
+                if page.get_by_text("Yes", exact=True).is_visible(): page.get_by_text("Yes", exact=True).click()
 
-                # Monitoring
                 start_time = time.time()
                 while not page.get_by_text("Uploads completed").is_visible():
                     if time.time() - start_time > 60:
@@ -181,7 +149,6 @@ def master_process(link, method):
             except Exception as e:
                 take_screenshot(page, "❌ Error Screen")
                 bot.send_message(chat_id, f"❌ Error: {str(e)[:200]}")
-            
             browser.close()
 
     except Exception as e:
