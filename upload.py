@@ -6,12 +6,12 @@ from playwright.sync_api import sync_playwright
 
 # 🔑 Nayi Details (Updated)
 TOKEN = "8485872476:AAGt-C0JKjr6JpLwvIGtGWwMh-sFh0-PsC0"
-chat_id = 7144917062  # Aapki Fixed Chat ID
+chat_id = 7144917062  # Fixed Chat ID
 bot = telebot.TeleBot(TOKEN)
 
 # GitHub Action se link uthana
 LINK = os.environ.get("FILE_LINK", "")
-FILE_NAME = "jazz_upload.mp4"
+FILE_NAME = "jazz_upload_file.mp4"
 
 # Global variables
 jazz_number = None
@@ -31,7 +31,7 @@ def take_screenshot(page, caption):
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     global state
-    bot.reply_to(message, "👋 Salam! Naye Token ke saath Bot Online hai.\n📥 File download ho rahi hai...\n\n📱 Apna Jazz Number (03...) bhejein:")
+    bot.reply_to(message, "👋 Salam! Colab logic wala Bot online hai.\n📥 File download ho rahi hai...\n\n📱 Apna Jazz Number (03...) bhejein:")
     state = "WAITING_NUMBER"
 
 @bot.message_handler(func=lambda message: True)
@@ -42,48 +42,51 @@ def handle_message(message):
     if state == "WAITING_NUMBER" or state == "WAITING_FOR_USER":
         if text.startswith("03") and len(text) == 11:
             jazz_number = text
-            bot.send_message(chat_id, f"✅ Number {jazz_number} mil gaya. Jazz Drive open kar raha hoon...")
+            bot.send_message(chat_id, f"✅ Number {jazz_number} mil gaya. Login shuru...")
             state = "READY_FOR_LOGIN"
             
     elif state == "WAITING_OTP":
         otp_code = text
-        bot.send_message(chat_id, "✅ OTP mil gaya. Login shuru...")
+        bot.send_message(chat_id, "✅ OTP mil gaya. Process aage barh raha hai...")
         state = "OTP_RECEIVED"
 
 def polling_thread():
     bot.polling(non_stop=True)
 
-# Bot background mein on karna
 threading.Thread(target=polling_thread, daemon=True).start()
 
-print("Downloading file...")
+# 📥 Download shuru
+print("Downloading...")
 os.system(f"curl -L -o {FILE_NAME} '{LINK}'")
-print("Download complete.")
 
-# User ke number ka wait karna
 while state in ["WAITING_FOR_USER", "WAITING_NUMBER"]:
     time.sleep(2)
 
 try:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        context = browser.new_context(storage_state="state.json" if os.path.exists("state.json") else None)
+        # Login state load karna
+        context = browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            storage_state="state.json" if os.path.exists("state.json") else None
+        )
         page = context.new_page()
         
         page.goto("https://cloud.jazzdrive.com.pk/")
         time.sleep(5)
         
-        # Cookie Banner Handle
+        # 🍪 Cookie Banner Safai (Colab Logic)
         try:
             page.get_by_text("Accept All").click(timeout=3000)
+            time.sleep(2)
         except: pass
 
-        # Login Logic
+        # 📱 Login Section
         if page.locator("//*[@id='msisdn']").is_visible():
             page.locator("//*[@id='msisdn']").fill(jazz_number)
             page.locator("//*[@id='signinbtn']").first.click()
             
-            bot.send_message(chat_id, "🔢 Jazz ki taraf se OTP aaya hoga, wo bhejein:")
+            bot.send_message(chat_id, "🔢 Jazz Drive ka 4-Digit OTP bhejein:")
             state = "WAITING_OTP"
             while state == "WAITING_OTP": time.sleep(1)
             
@@ -91,30 +94,50 @@ try:
             time.sleep(5)
             context.storage_state(path="state.json")
 
-        bot.send_message(chat_id, "🚀 Uploading shuru! Main har 2 min baad photo bhejunga...")
+        # ==========================================
+        # 👑 SMART UPLOAD SYSTEM (Colab Integration)
+        # ==========================================
+        bot.send_message(chat_id, "🚀 Upload Menu khol raha hoon...")
         
-        # 🚀 UPLOADING PROCESS
-        page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
+        # Header button click karne wali logic
+        page.evaluate("""
+            let buttons = document.querySelectorAll('header button');
+            for(let btn of buttons) {
+                if(btn.innerHTML.includes('path') || btn.innerHTML.includes('svg') || btn.innerHTML.includes('cloud')) {
+                    btn.click();
+                }
+            }
+        """)
+        time.sleep(3)
+
+        bot.send_message(chat_id, "📂 File attach ho rahi hai...")
+        with page.expect_file_chooser() as fc_info:
+            page.get_by_text("Upload files", exact=False).first.click(force=True)
+            
+        fc_info.value.set_files(os.path.abspath(FILE_NAME))
+        
+        # 🔥 1GB+ Bypass
         time.sleep(5)
-        
-        # Bari file ka Yes button
         try:
-            yes_btn = page.get_by_text("Yes", exact=False)
+            yes_btn = page.get_by_text("Yes", exact=True)
             if yes_btn.is_visible():
                 yes_btn.click()
-                bot.send_message(chat_id, "✅ Large file confirmed!")
+                bot.send_message(chat_id, "✅ Large file (Huge Item) confirm kar di!")
         except: pass
 
-        # Live Progress Screenshots
+        bot.send_message(chat_id, "🛰️ Uploading shuru! Har 2 min baad photo bhejunga...")
+
+        # 🔄 Progress Screenshots Loop
         while not page.get_by_text("Uploads completed").is_visible():
             take_screenshot(page, "🕒 Uploading Progress... (Live view)")
             time.sleep(120)
             
-        bot.send_message(chat_id, "🎉 MUBARAK! File Jazz Drive par upload ho gayi.")
-        take_screenshot(page, "✅ Final Status")
+        bot.send_message(chat_id, "🎉 MUBARAK! File successfully upload ho gayi!")
+        take_screenshot(page, "✅ Final Status: Uploaded!")
         browser.close()
 
 except Exception as e:
     bot.send_message(chat_id, f"❌ Error: {str(e)[:150]}")
 finally:
     if os.path.exists(FILE_NAME): os.remove(FILE_NAME)
+        
