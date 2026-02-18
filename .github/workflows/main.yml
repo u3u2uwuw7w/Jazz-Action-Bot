@@ -1,30 +1,35 @@
-name: Jazz Drive Uploader
+name: Jazz Drive Multi-Bot 24/7
 
 on:
-  workflow_dispatch:
-    inputs:
-      link:
-        description: 'Direct Download Link Yahan Dalein'
-        required: true
+  workflow_dispatch: # Koi input nahi, bas button dabao
 
 jobs:
-  upload_job:
+  run_bot:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Python Setup
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Tools Install
+      - name: Install Tools
         run: |
-          pip install playwright pyTelegramBotAPI
+          pip install playwright pyTelegramBotAPI yt-dlp
           playwright install chromium
+          sudo apt-get install ffmpeg -y
 
-      - name: Run Uploader
-        env:
-          FILE_LINK: ${{ github.event.inputs.link }}
+      - name: Run Bot
+        # Bot ko hamesha ke liye on rakhne ke liye
         run: python upload.py
+
+      - name: Save Login Session
+        if: always()
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add state.json
+          git commit -m "Updated Login Session" || exit 0
+          git push
+          
