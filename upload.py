@@ -13,10 +13,8 @@ FILE_NAME = "jazz_upload_video.mp4"
 
 user_context = {"state": "IDLE", "link": None, "quality": None, "number": None, "otp": None}
 
-# 🎯 YOUR XPATHS (From Screenshot)
+# 🎯 YOUR XPATHS
 XPATH_ACCEPT_ALL = "//button[contains(text(), 'Accept All')]"
-XPATH_UPLOAD_BUTTON_1 = "//header//button[contains(., 'upload') or .//*[name()='svg']]" 
-XPATH_UPLOAD_FILES_OPTION = "//li[contains(., 'Upload files') or contains(., 'upload files')]"
 
 def take_screenshot(page, caption):
     try:
@@ -29,7 +27,7 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "🚀 **XPATH MASTER BOT ONLINE**\n\nAb ye Exact Buttons par click karega. Link bhejein!")
+    bot.send_message(chat_id, "🚀 **YOUTUBE FIXED BOT ONLINE**\n\nAb 'Sign in' wala error nahi aayega. Link bhejein!")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
@@ -58,15 +56,20 @@ def handle_query(call):
 
 def master_process(link, quality):
     try:
-        # 1. DOWNLOAD
+        # 1. DOWNLOAD (FIXED FOR YOUTUBE BLOCK)
         bot.send_message(chat_id, f"📥 Downloading ({quality})...")
+        
+        # 🔥 Yahan humne 'android' client use kiya hai taake YouTube block na kare
         if quality == "best":
-            os.system(f"curl -L -o {FILE_NAME} '{link}'")
+            cmd = f'yt-dlp --extractor-args "youtube:player_client=android" -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
         else:
-            os.system(f'yt-dlp -f "bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={quality}]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"')
+            cmd = f'yt-dlp --extractor-args "youtube:player_client=android" -f "bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={quality}]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
+            
+        os.system(cmd)
 
+        # Check if file exists
         if not os.path.exists(FILE_NAME):
-            bot.send_message(chat_id, "❌ Error: File download nahi hui!")
+            bot.send_message(chat_id, "❌ Error: YouTube ne abhi bhi block kiya. Dobara try karein ya doosra link dein.")
             return
 
         # 2. UPLOAD
@@ -79,12 +82,11 @@ def master_process(link, quality):
                 page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
                 time.sleep(5)
 
-                # 🛡️ STEP 1: COOKIE BANNER REMOVAL (Using XPath)
+                # Cookie Banner
                 try:
                     if page.locator(XPATH_ACCEPT_ALL).is_visible():
                         page.locator(XPATH_ACCEPT_ALL).click()
                         time.sleep(1)
-                        # Double check: Remove from DOM if still there
                         page.evaluate("document.querySelectorAll('button').forEach(b => { if(b.innerText.includes('Accept All')) b.remove(); })")
                 except: pass
 
@@ -103,42 +105,30 @@ def master_process(link, quality):
                     time.sleep(8)
                     context.storage_state(path="state.json")
 
-                # 🚀 STEP 2: UPLOAD PROCESS
-                bot.send_message(chat_id, "🚀 Upload Menu dhoond raha hoon...")
-                
-                # Koshish 1: Header Button Click (Generic XPath)
+                # Upload Logic
+                bot.send_message(chat_id, "🚀 Uploading shuru...")
                 try:
                     page.locator("header button").filter(has_text="cloud_upload").click() 
                 except:
-                    # Alternative: Click any button with SVG in header
                     page.evaluate("document.querySelectorAll('header button').forEach(b => { if(b.innerHTML.includes('svg')) b.click(); })")
-                
                 time.sleep(2)
 
-                # Koshish 2: Select 'Upload files' from Menu
-                file_attached = False
                 try:
                     if page.locator("div[role='dialog']").is_visible():
                         with page.expect_file_chooser() as fc_info:
                             page.locator("div[role='dialog'] >> text=/upload files/i").first.click()
                         fc_info.value.set_files(os.path.abspath(FILE_NAME))
-                        file_attached = True
                     else:
-                        raise Exception("Menu not visible")
+                        raise Exception("Menu hidden")
                 except:
-                    # Koshish 3: Direct Input (Fallback)
-                    bot.send_message(chat_id, "⚠️ Menu nahi khula, Direct Input use kar raha hoon...")
+                    bot.send_message(chat_id, "⚠️ Direct Input use kar raha hoon...")
                     page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
-                    file_attached = True
 
-                # 1GB+ Bypass
                 time.sleep(5)
                 if page.get_by_text("Yes", exact=True).is_visible(): 
                     page.get_by_text("Yes", exact=True).click()
-                    bot.send_message(chat_id, "✅ Large File 'Yes' clicked.")
 
-                # 🔥 MONITORING
-                bot.send_message(chat_id, "👀 Monitoring Started... Screenshot ka intezar karein.")
+                # Monitoring
                 start_time = time.time()
                 while not page.get_by_text("Uploads completed").is_visible():
                     if time.time() - start_time > 60:
