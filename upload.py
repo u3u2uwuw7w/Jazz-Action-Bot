@@ -17,6 +17,15 @@ user_context = {"state": "IDLE", "link": None, "quality": None, "number": None, 
 # 🎯 YOUR XPATHS
 XPATH_ACCEPT_ALL = "//button[contains(text(), 'Accept All')]"
 
+# 🔥 LIST OF POWERFUL SERVERS (Mirrors)
+# Agar aik fail hua to agla try karega
+API_MIRRORS = [
+    "https://co.wuk.sh/api/json",        # Server 1 (Best)
+    "https://api.cobalt.tools/api/json", # Server 2 (Backup)
+    "https://cobalt.xy24.eu/api/json",   # Server 3 (Europe)
+    "https://dl.khub.students.nom.sh/api/json" # Server 4 (Student)
+]
+
 def take_screenshot(page, caption):
     try:
         path = "status.png"
@@ -28,7 +37,7 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "🌐 **API BYPASS MODE ACTIVE**\n\nAb yt-dlp use nahi hoga. 100% Download hoga. Link bhejein!")
+    bot.send_message(chat_id, "🌐 **MULTI-SERVER BOT READY**\n\nAb ye 4 alag servers try karega. 100% Download Hoga. Link bhejein!")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
@@ -43,7 +52,6 @@ def handle_msg(message):
     elif "youtube.com" in text or "youtu.be" in text:
         user_context["link"] = text
         markup = types.InlineKeyboardMarkup()
-        # API mostly 360, 720, 1080 support karta hai
         markup.add(types.InlineKeyboardButton("360p", callback_data="360"), types.InlineKeyboardButton("720p", callback_data="720"))
         markup.add(types.InlineKeyboardButton("1080p", callback_data="1080"))
         bot.send_message(chat_id, "🎬 YouTube Quality select karein:", reply_markup=markup)
@@ -57,47 +65,38 @@ def handle_query(call):
     bot.answer_callback_query(call.id, f"{quality} selected!")
     threading.Thread(target=master_process, args=(user_context["link"], quality)).start()
 
-def get_direct_link_via_api(url, quality):
+def get_link_from_mirrors(url, quality):
     """
-    Ye function Cobalt API use karke direct link layega.
+    Ye function bari bari saray servers check karega.
     """
-    try:
-        api_url = "https://api.cobalt.tools/api/json"
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        }
-        
-        # Quality mapping
-        vQual = "720"
-        if quality == "360": vQual = "360"
-        elif quality == "1080": vQual = "1080"
-        elif quality == "best": vQual = "max"
+    vQual = "720"
+    if quality == "360": vQual = "360"
+    elif quality == "1080": vQual = "1080"
+    elif quality == "best": vQual = "max"
 
-        payload = {
-            "url": url,
-            "vQuality": vQual,
-            "filenamePattern": "basic"
-        }
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    payload = {"url": url, "vQuality": vQual, "filenamePattern": "basic"}
 
-        response = requests.post(api_url, json=payload, headers=headers)
-        data = response.json()
+    # Loop through all mirrors
+    for server in API_MIRRORS:
+        try:
+            print(f"Trying Server: {server}")
+            response = requests.post(server, json=payload, headers=headers, timeout=10)
+            data = response.json()
 
-        if data.get("status") == "stream":
-            return data.get("url")
-        elif data.get("status") == "picker":
-            # Agar multiple options hon to pehla utha lo
-            return data.get("picker")[0].get("url")
-        else:
-            return None
-    except Exception as e:
-        print(e)
-        return None
+            if data.get("status") == "stream":
+                return data.get("url")
+            elif data.get("status") == "picker":
+                return data.get("picker")[0].get("url")
+        except:
+            continue # Agar fail ho to agla server try karo
+    
+    return None # Agar saray fail ho jayen
 
 def master_process(link, quality):
     try:
         # ==========================================
-        # 📥 STEP 1: DOWNLOADER (API METHOD)
+        # 📥 STEP 1: DOWNLOADER (MULTI-SERVER)
         # ==========================================
         
         download_url = ""
@@ -106,25 +105,26 @@ def master_process(link, quality):
             download_url = link
             bot.send_message(chat_id, "🚀 Direct File Download...")
         else:
-            bot.send_message(chat_id, f"🌐 API se Link generate kar raha hoon ({quality})...")
-            # Cobalt API Call
-            direct_link = get_direct_link_via_api(link, quality)
+            bot.send_message(chat_id, f"🔍 Best Server dhoond raha hoon ({quality})...")
+            
+            # 🔥 Multi-Mirror Call
+            direct_link = get_link_from_mirrors(link, quality)
             
             if direct_link:
                 download_url = direct_link
-                bot.send_message(chat_id, "✅ Link mil gaya! Downloading...")
+                bot.send_message(chat_id, "✅ Server mil gaya! Downloading...")
             else:
-                bot.send_message(chat_id, "❌ Error: API se link nahi mila. Server busy ho sakta hai.")
+                bot.send_message(chat_id, "❌ Error: Saray servers busy hain. Thori dair baad try karein.")
                 return
 
-        # Use CURL to download the generated link (Fastest & Reliable)
+        # Use CURL (Fastest)
         os.system(f"curl -L -o {FILE_NAME} '{download_url}'")
 
         if not os.path.exists(FILE_NAME):
             bot.send_message(chat_id, "❌ Error: Download fail hua!")
             return
         
-        # File Size Check (Optional Log)
+        # File Size Check
         file_size = os.path.getsize(FILE_NAME) / (1024 * 1024)
         bot.send_message(chat_id, f"📦 File Size: {file_size:.2f} MB. Uploading...")
 
@@ -166,7 +166,6 @@ def master_process(link, quality):
                 # Upload Logic
                 bot.send_message(chat_id, "🚀 Uploading shuru...")
                 try:
-                    # SVG Icon Click
                     page.evaluate("document.querySelectorAll('header button').forEach(b => { if(b.innerHTML.includes('svg')) b.click(); })")
                 except: pass
                 time.sleep(2)
@@ -177,8 +176,7 @@ def master_process(link, quality):
                             page.locator("div[role='dialog'] >> text=/upload files/i").first.click()
                         fc_info.value.set_files(os.path.abspath(FILE_NAME))
                     else:
-                        # Direct Input Fallback
-                        bot.send_message(chat_id, "⚠️ Menu hidden, Direct Input use kar raha hoon...")
+                        bot.send_message(chat_id, "⚠️ Direct Input use kar raha hoon...")
                         page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
                 except:
                      page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
