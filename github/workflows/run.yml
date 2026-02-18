@@ -1,4 +1,4 @@
-name: Jazz Drive API Bot
+name: Jazz Drive Browser Bot
 
 on:
   workflow_dispatch:
@@ -18,8 +18,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          # Requests library zaroori hai API ke liye
-          pip install playwright pyTelegramBotAPI requests
+          pip install playwright pyTelegramBotAPI
           playwright install chromium
 
       - name: Run Bot
