@@ -1,6 +1,7 @@
 import os
 import time
 import threading
+import requests
 import telebot
 from telebot import types
 from playwright.sync_api import sync_playwright
@@ -27,7 +28,7 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "📺 **SMART TV MODE ACTIVE**\n\nAb YouTube block nahi karega. Link bhejein!")
+    bot.send_message(chat_id, "🌐 **API BYPASS MODE ACTIVE**\n\nAb yt-dlp use nahi hoga. 100% Download hoga. Link bhejein!")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
@@ -42,11 +43,12 @@ def handle_msg(message):
     elif "youtube.com" in text or "youtu.be" in text:
         user_context["link"] = text
         markup = types.InlineKeyboardMarkup()
+        # API mostly 360, 720, 1080 support karta hai
         markup.add(types.InlineKeyboardButton("360p", callback_data="360"), types.InlineKeyboardButton("720p", callback_data="720"))
-        markup.add(types.InlineKeyboardButton("Best", callback_data="best"))
+        markup.add(types.InlineKeyboardButton("1080p", callback_data="1080"))
         bot.send_message(chat_id, "🎬 YouTube Quality select karein:", reply_markup=markup)
     elif text.startswith("http"):
-        bot.send_message(chat_id, "⚡ Direct Link mil gaya! Fast Download shuru...")
+        bot.send_message(chat_id, "⚡ Direct Link mil gaya! Download shuru...")
         threading.Thread(target=master_process, args=(text, "direct")).start()
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -55,44 +57,79 @@ def handle_query(call):
     bot.answer_callback_query(call.id, f"{quality} selected!")
     threading.Thread(target=master_process, args=(user_context["link"], quality)).start()
 
+def get_direct_link_via_api(url, quality):
+    """
+    Ye function Cobalt API use karke direct link layega.
+    """
+    try:
+        api_url = "https://api.cobalt.tools/api/json"
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        
+        # Quality mapping
+        vQual = "720"
+        if quality == "360": vQual = "360"
+        elif quality == "1080": vQual = "1080"
+        elif quality == "best": vQual = "max"
+
+        payload = {
+            "url": url,
+            "vQuality": vQual,
+            "filenamePattern": "basic"
+        }
+
+        response = requests.post(api_url, json=payload, headers=headers)
+        data = response.json()
+
+        if data.get("status") == "stream":
+            return data.get("url")
+        elif data.get("status") == "picker":
+            # Agar multiple options hon to pehla utha lo
+            return data.get("picker")[0].get("url")
+        else:
+            return None
+    except Exception as e:
+        print(e)
+        return None
+
 def master_process(link, quality):
     try:
         # ==========================================
-        # 📥 STEP 1: DOWNLOADER (TV FIX)
+        # 📥 STEP 1: DOWNLOADER (API METHOD)
         # ==========================================
+        
+        download_url = ""
+        
         if quality == "direct":
-            bot.send_message(chat_id, "🚀 Direct File Download (curl)...")
-            os.system(f"curl -L -o {FILE_NAME} '{link}'")
-
+            download_url = link
+            bot.send_message(chat_id, "🚀 Direct File Download...")
         else:
-            bot.send_message(chat_id, f"📥 YouTube ({quality}) Download (TV Mode)...")
+            bot.send_message(chat_id, f"🌐 API se Link generate kar raha hoon ({quality})...")
+            # Cobalt API Call
+            direct_link = get_direct_link_via_api(link, quality)
             
-            # Update Tool
-            os.system("pip install --force-reinstall https://github.com/yt-dlp/yt-dlp/archive/master.zip > /dev/null")
-            
-            # 🔥 MAGIC LINE: Use 'tv' client to bypass bot detection
-            client_arg = '--extractor-args "youtube:player_client=tv"'
-            
-            if quality == "best":
-                cmd = f'yt-dlp {client_arg} -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
+            if direct_link:
+                download_url = direct_link
+                bot.send_message(chat_id, "✅ Link mil gaya! Downloading...")
             else:
-                cmd = f'yt-dlp {client_arg} -f "bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={quality}]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
-            
-            exit_code = os.system(cmd)
+                bot.send_message(chat_id, "❌ Error: API se link nahi mila. Server busy ho sakta hai.")
+                return
 
-            # Fallback: Agar TV fail ho to 'Android Creator' try karein
-            if exit_code != 0 or not os.path.exists(FILE_NAME):
-                bot.send_message(chat_id, "⚠️ TV Mode fail hua, 'Android Creator' try kar raha hoon...")
-                client_arg = '--extractor-args "youtube:player_client=android_creator"'
-                cmd = cmd.replace('player_client=tv', 'player_client=android_creator')
-                os.system(cmd)
+        # Use CURL to download the generated link (Fastest & Reliable)
+        os.system(f"curl -L -o {FILE_NAME} '{download_url}'")
 
         if not os.path.exists(FILE_NAME):
-            bot.send_message(chat_id, "❌ Error: File download nahi hui! YouTube ne IP block kar diya hai.")
+            bot.send_message(chat_id, "❌ Error: Download fail hua!")
             return
+        
+        # File Size Check (Optional Log)
+        file_size = os.path.getsize(FILE_NAME) / (1024 * 1024)
+        bot.send_message(chat_id, f"📦 File Size: {file_size:.2f} MB. Uploading...")
 
         # ==========================================
-        # 🛰️ STEP 2: UPLOAD
+        # 🛰️ STEP 2: UPLOAD (Jazz Drive)
         # ==========================================
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -126,12 +163,12 @@ def master_process(link, quality):
                     time.sleep(8)
                     context.storage_state(path="state.json")
 
-                # Upload
+                # Upload Logic
                 bot.send_message(chat_id, "🚀 Uploading shuru...")
                 try:
-                    page.locator("header button").filter(has_text="cloud_upload").click() 
-                except:
+                    # SVG Icon Click
                     page.evaluate("document.querySelectorAll('header button').forEach(b => { if(b.innerHTML.includes('svg')) b.click(); })")
+                except: pass
                 time.sleep(2)
 
                 try:
@@ -140,12 +177,14 @@ def master_process(link, quality):
                             page.locator("div[role='dialog'] >> text=/upload files/i").first.click()
                         fc_info.value.set_files(os.path.abspath(FILE_NAME))
                     else:
-                        raise Exception("Menu hidden")
+                        # Direct Input Fallback
+                        bot.send_message(chat_id, "⚠️ Menu hidden, Direct Input use kar raha hoon...")
+                        page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
                 except:
-                    bot.send_message(chat_id, "⚠️ Direct Input use kar raha hoon...")
-                    page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
+                     page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
 
                 time.sleep(5)
+                # 1GB+ Fix
                 if page.get_by_text("Yes", exact=True).is_visible(): 
                     page.get_by_text("Yes", exact=True).click()
 
