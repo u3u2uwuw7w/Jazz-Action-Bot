@@ -1,7 +1,6 @@
 import os
 import time
 import threading
-import requests
 import telebot
 from telebot import types
 from playwright.sync_api import sync_playwright
@@ -13,18 +12,7 @@ bot = telebot.TeleBot(TOKEN)
 FILE_NAME = "jazz_upload_video.mp4"
 
 user_context = {"state": "IDLE", "link": None, "quality": None, "number": None, "otp": None}
-
-# 🎯 YOUR XPATHS
 XPATH_ACCEPT_ALL = "//button[contains(text(), 'Accept All')]"
-
-# 🔥 LIST OF POWERFUL SERVERS (Mirrors)
-# Agar aik fail hua to agla try karega
-API_MIRRORS = [
-    "https://co.wuk.sh/api/json",        # Server 1 (Best)
-    "https://api.cobalt.tools/api/json", # Server 2 (Backup)
-    "https://cobalt.xy24.eu/api/json",   # Server 3 (Europe)
-    "https://dl.khub.students.nom.sh/api/json" # Server 4 (Student)
-]
 
 def take_screenshot(page, caption):
     try:
@@ -37,100 +25,94 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "🌐 **MULTI-SERVER BOT READY**\n\nAb ye 4 alag servers try karega. 100% Download Hoga. Link bhejein!")
+    bot.send_message(chat_id, "🌍 **BROWSER BYPASS BOT READY**\n\nAb main websites ke zariye link nikalunga. 100% Working! Link bhejein.")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
     text = message.text.strip()
-    
     if user_context["state"] == "WAITING_FOR_NUMBER":
         user_context["number"] = text
         user_context["state"] = "NUMBER_RECEIVED"
     elif user_context["state"] == "WAITING_FOR_OTP":
         user_context["otp"] = text
         user_context["state"] = "OTP_RECEIVED"
-    elif "youtube.com" in text or "youtu.be" in text:
+    elif "http" in text:
         user_context["link"] = text
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("360p", callback_data="360"), types.InlineKeyboardButton("720p", callback_data="720"))
-        markup.add(types.InlineKeyboardButton("1080p", callback_data="1080"))
-        bot.send_message(chat_id, "🎬 YouTube Quality select karein:", reply_markup=markup)
-    elif text.startswith("http"):
-        bot.send_message(chat_id, "⚡ Direct Link mil gaya! Download shuru...")
-        threading.Thread(target=master_process, args=(text, "direct")).start()
+        # Direct Quality Check
+        if "youtube.com" in text or "youtu.be" in text:
+            bot.send_message(chat_id, "🔍 Website se link nikaal raha hoon (Video)...")
+            threading.Thread(target=master_process, args=(text, "website")).start()
+        else:
+            bot.send_message(chat_id, "⚡ Direct Download shuru...")
+            threading.Thread(target=master_process, args=(text, "direct")).start()
 
-@bot.callback_query_handler(func=lambda call: True)
-def handle_query(call):
-    quality = call.data
-    bot.answer_callback_query(call.id, f"{quality} selected!")
-    threading.Thread(target=master_process, args=(user_context["link"], quality)).start()
-
-def get_link_from_mirrors(url, quality):
+def get_link_via_browser(url):
     """
-    Ye function bari bari saray servers check karega.
+    Ye function Playwright ke zariye downloader websites visit karega.
     """
-    vQual = "720"
-    if quality == "360": vQual = "360"
-    elif quality == "1080": vQual = "1080"
-    elif quality == "best": vQual = "max"
-
-    headers = {"Accept": "application/json", "Content-Type": "application/json"}
-    payload = {"url": url, "vQuality": vQual, "filenamePattern": "basic"}
-
-    # Loop through all mirrors
-    for server in API_MIRRORS:
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
         try:
-            print(f"Trying Server: {server}")
-            response = requests.post(server, json=payload, headers=headers, timeout=10)
-            data = response.json()
+            # 🟢 METHOD 1: Publer.io (Clean & Fast)
+            page = browser.new_page()
+            print("Trying Publer...")
+            page.goto("https://publer.io/tools/youtube-downloader", timeout=60000)
+            page.fill("input[name='url']", url)
+            page.click("button[type='submit']")
+            # Wait for download button
+            try:
+                page.wait_for_selector("a[download]", timeout=15000)
+                # Get the link of the first download button (usually highest quality)
+                download_url = page.eval_on_selector("a[download]", "el => el.href")
+                if download_url: return download_url
+            except:
+                print("Publer fail, trying next...")
 
-            if data.get("status") == "stream":
-                return data.get("url")
-            elif data.get("status") == "picker":
-                return data.get("picker")[0].get("url")
-        except:
-            continue # Agar fail ho to agla server try karo
-    
-    return None # Agar saray fail ho jayen
+            # 🟡 METHOD 2: 10Downloader (Backup)
+            page = browser.new_page()
+            print("Trying 10Downloader...")
+            page.goto("https://10downloader.com/en/1", timeout=60000)
+            page.fill("#url", url)
+            page.click(".btn-action")
+            # Wait for links
+            try:
+                page.wait_for_selector(".download-item", timeout=20000)
+                # Extract first MP4 link
+                download_url = page.get_attribute(".download-item a", "href")
+                if download_url: return download_url
+            except:
+                print("10Downloader fail.")
+            
+        except Exception as e:
+            print(f"Browser Error: {e}")
+        finally:
+            browser.close()
+    return None
 
-def master_process(link, quality):
+def master_process(link, method):
     try:
-        # ==========================================
-        # 📥 STEP 1: DOWNLOADER (MULTI-SERVER)
-        # ==========================================
-        
         download_url = ""
         
-        if quality == "direct":
+        # 1. LINK FETCHING
+        if method == "direct":
             download_url = link
-            bot.send_message(chat_id, "🚀 Direct File Download...")
         else:
-            bot.send_message(chat_id, f"🔍 Best Server dhoond raha hoon ({quality})...")
-            
-            # 🔥 Multi-Mirror Call
-            direct_link = get_link_from_mirrors(link, quality)
-            
-            if direct_link:
-                download_url = direct_link
-                bot.send_message(chat_id, "✅ Server mil gaya! Downloading...")
+            final_link = get_link_via_browser(link)
+            if final_link:
+                download_url = final_link
+                bot.send_message(chat_id, "✅ Link mil gaya! Downloading...")
             else:
-                bot.send_message(chat_id, "❌ Error: Saray servers busy hain. Thori dair baad try karein.")
+                bot.send_message(chat_id, "❌ Error: Kisi bhi website se link nahi mila. Video private ho sakti hai.")
                 return
 
-        # Use CURL (Fastest)
+        # 2. DOWNLOAD (CURL)
         os.system(f"curl -L -o {FILE_NAME} '{download_url}'")
 
-        if not os.path.exists(FILE_NAME):
-            bot.send_message(chat_id, "❌ Error: Download fail hua!")
+        if not os.path.exists(FILE_NAME) or os.path.getsize(FILE_NAME) < 1000:
+            bot.send_message(chat_id, "❌ Error: Download fail hua (File empty).")
             return
         
-        # File Size Check
-        file_size = os.path.getsize(FILE_NAME) / (1024 * 1024)
-        bot.send_message(chat_id, f"📦 File Size: {file_size:.2f} MB. Uploading...")
-
-        # ==========================================
-        # 🛰️ STEP 2: UPLOAD (Jazz Drive)
-        # ==========================================
+        # 3. UPLOAD (JAZZ DRIVE)
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(viewport={'width': 1280, 'height': 720}, storage_state="state.json" if os.path.exists("state.json") else None)
@@ -176,7 +158,6 @@ def master_process(link, quality):
                             page.locator("div[role='dialog'] >> text=/upload files/i").first.click()
                         fc_info.value.set_files(os.path.abspath(FILE_NAME))
                     else:
-                        bot.send_message(chat_id, "⚠️ Direct Input use kar raha hoon...")
                         page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
                 except:
                      page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
