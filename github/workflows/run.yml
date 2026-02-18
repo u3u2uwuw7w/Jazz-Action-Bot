@@ -1,4 +1,4 @@
-name: Jazz Drive PyTubeFix
+name: Jazz Drive Direct Bot
 
 on:
   workflow_dispatch:
@@ -16,10 +16,7 @@ jobs:
 
       - name: Install Tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          # 🔥 YE NAYI LIBRARY HAI JO YOUTUBE KO FIX KAREGI
-          pip install pytubefix playwright pyTelegramBotAPI
+          pip install playwright pyTelegramBotAPI
           playwright install chromium
 
       - name: Run Bot
