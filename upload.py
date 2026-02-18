@@ -2,14 +2,17 @@ import os
 import time
 import threading
 import telebot
+from telebot import types
 from playwright.sync_api import sync_playwright
 
-# 🔑 Details
+# 🔑 Aapka Token aur ID (Updated)
 TOKEN = "8485872476:AAGt-C0JKjr6JpLwvIGtGWwMh-sFh0-PsC0"
 chat_id = 7144917062
 bot = telebot.TeleBot(TOKEN)
-FILE_NAME = "video_file.mp4"
-is_processing = False
+FILE_NAME = "jazz_upload_file.mp4"
+
+# Global Storage for link and quality
+user_data = {}
 
 def take_screenshot(page, caption):
     try:
@@ -22,35 +25,47 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.send_message(chat_id, "🚀 **YOUTUBE + JAZZ DRIVE MASTER BOT** 🚀\n\nBas koi bhi link (Direct ya YouTube) bhejien, baqi kaam mera hai!")
+    bot.send_message(chat_id, "🔥 **MULTI-BOT READY!** 🔥\n\nAb link GitHub pe nahi, yahan bhejein. YouTube link bhejenge toh quality bhi poochi jaye gi.")
 
 @bot.message_handler(func=lambda m: True)
-def handle_all_messages(message):
-    global is_processing
+def handle_messages(message):
     text = message.text.strip()
+    
+    if "youtube.com" in text or "youtu.be" in text:
+        user_data['link'] = text
+        # Quality Selection Buttons
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("360p", callback_data="360"),
+                   types.InlineKeyboardButton("480p", callback_data="480"))
+        markup.add(types.InlineKeyboardButton("720p", callback_data="720"),
+                   types.InlineKeyboardButton("1080p", callback_data="1080"))
+        bot.send_message(chat_id, "🎬 YouTube Quality select karein:", reply_markup=markup)
+    
+    elif text.startswith("http"):
+        bot.send_message(chat_id, "📥 Direct Link mil gaya! Download shuru...")
+        threading.Thread(target=process_video, args=(text, "best")).start()
 
-    if "http" in text and not is_processing:
-        is_processing = True
-        threading.Thread(target=process_task, args=(text,)).start()
-    elif "http" in text and is_processing:
-        bot.send_message(chat_id, "⏳ Bhai, abhi aik file ho rahi hai, thora sabr!")
+@bot.callback_query_handler(func=lambda call: True)
+def query_handler(call):
+    quality = call.data
+    link = user_data.get('link')
+    bot.answer_callback_query(call.id, f"{quality}p select ho gaya!")
+    bot.send_message(chat_id, f"📥 YouTube ({quality}p) download ho raha hai...")
+    threading.Thread(target=process_video, args=(link, quality)).start()
 
-def process_task(link):
-    global is_processing
+def process_video(link, quality):
     try:
-        bot.send_message(chat_id, "📥 Download shuru ho raha hai (YouTube/Direct)...")
-        
-        # 🎥 YouTube ya Direct Download (yt-dlp use kar rahe hain)
-        # Is se file hamesha 'video_file.mp4' ke naam se save hogi
-        os.system(f'yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"')
-        
-        if not os.path.exists(FILE_NAME):
-            bot.send_message(chat_id, "❌ Download fail ho gaya! Link check karein.")
-            return
+        # 1. DOWNLOAD (YouTube ya Direct)
+        if quality == "best":
+            os.system(f"curl -L -o {FILE_NAME} '{link}'")
+        else:
+            # yt-dlp quality selection
+            os.system(f'yt-dlp -f "bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={quality}][ext=mp4]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"')
 
+        # 2. JAZZ DRIVE UPLOAD
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            # 🍪 Session load karna
+            # 🍪 Permanent Login (state.json load karna)
             context = browser.new_context(
                 viewport={'width': 1280, 'height': 720},
                 storage_state="state.json" if os.path.exists("state.json") else None
@@ -59,56 +74,45 @@ def process_task(link):
             page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
             time.sleep(5)
 
-            # Accept Cookies
+            # Accept Cookies Banner
             try: page.evaluate("document.querySelectorAll('button').forEach(b => { if(b.innerText.includes('Accept All')) b.click(); })")
             except: pass
 
-            # 📱 SMART LOGIN CHECK
+            # 📱 Smart Login Check (OTP sirf tab maange ga jab login na ho)
             if page.locator("//*[@id='msisdn']").is_visible():
-                bot.send_message(chat_id, "🔑 Login expired! Apna Jazz Number (03...) bhejein:")
-                # Note: Aapka purana OTP handler background mein active rahega
-                # Yahan logic simple rakhne ke liye hum manual OTP flow chalate hain
-                bot.send_message(chat_id, "⚠️ Meherbani karke purana OTP wala code yahan follow karein.")
-                # (OTP logic can be added here for full automation)
+                bot.send_message(chat_id, "🔑 Login expired! Number aur OTP wala purana system follow karein.")
+                # Yahan aap apna purana number 03243387052 use kar sakte hain
                 return 
 
-            # 🚀 UPLOADING (Colab Smart Logic)
-            bot.send_message(chat_id, "🚀 Jazz Drive Menu open ho raha hai...")
+            # Upload Process (Aapki Modal logic)
             page.evaluate("""
                 let btns = document.querySelectorAll('header button');
                 btns.forEach(b => { if(b.innerHTML.includes('svg') || b.innerHTML.includes('path')) b.click(); });
             """)
             time.sleep(3)
             
-            # File Attach
-            try:
-                page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME), timeout=10000)
-            except:
-                with page.expect_file_chooser(timeout=10000) as fc_info:
-                    page.locator("div[role='dialog'] >> text=/upload files/i").first.click(force=True)
-                fc_info.value.set_files(os.path.abspath(FILE_NAME))
+            with page.expect_file_chooser() as fc_info:
+                page.locator("div[role='dialog'] >> text=/upload files/i").first.click(force=True)
+            fc_info.value.set_files(os.path.abspath(FILE_NAME))
 
-            # 1GB+ Yes/No Check
+            # 1GB+ Bypass
             time.sleep(7)
-            yes_btn = page.get_by_text("Yes", exact=True)
-            if yes_btn.is_visible():
-                yes_btn.click()
-                bot.send_message(chat_id, "✅ 1GB+ confirmation de di gayi hai.")
+            if page.get_by_text("Yes", exact=True).is_visible():
+                page.get_by_text("Yes", exact=True).click()
 
-            # Progress monitoring
+            # Progress check
             while not page.get_by_text("Uploads completed").is_visible():
                 take_screenshot(page, "🕒 Uploading Progress...")
                 time.sleep(120)
 
-            bot.send_message(chat_id, "🎉 File Kamyabi se Upload ho gayi hai!")
+            bot.send_message(chat_id, "🎉 MUBARAK! File upload ho gayi.")
             context.storage_state(path="state.json") # Login save karna
             browser.close()
 
     except Exception as e:
-        bot.send_message(chat_id, f"❌ Error: {str(e)[:100]}")
+        bot.send_message(chat_id, f"❌ Error: {str(e)[:150]}")
     finally:
         if os.path.exists(FILE_NAME): os.remove(FILE_NAME)
-        is_processing = False
-        bot.send_message(chat_id, "Ready for NEXT task! 🔗")
+        bot.send_message(chat_id, "🔗 Agla link bhejein, main ready hoon!")
 
 bot.polling(non_stop=True)
