@@ -27,32 +27,26 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "🚀 **ALL-ROUNDER BOT READY**\n\n✅ Direct Link = Fast Download\n✅ YouTube = No Block Fix\n\nLink bhejein!")
+    bot.send_message(chat_id, "📺 **SMART TV MODE ACTIVE**\n\nAb YouTube block nahi karega. Link bhejein!")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
     text = message.text.strip()
     
-    # 1. Login Handling
     if user_context["state"] == "WAITING_FOR_NUMBER":
         user_context["number"] = text
         user_context["state"] = "NUMBER_RECEIVED"
     elif user_context["state"] == "WAITING_FOR_OTP":
         user_context["otp"] = text
         user_context["state"] = "OTP_RECEIVED"
-    
-    # 2. YouTube Handling
     elif "youtube.com" in text or "youtu.be" in text:
         user_context["link"] = text
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("360p", callback_data="360"), types.InlineKeyboardButton("720p", callback_data="720"))
         markup.add(types.InlineKeyboardButton("Best", callback_data="best"))
         bot.send_message(chat_id, "🎬 YouTube Quality select karein:", reply_markup=markup)
-    
-    # 3. DIRECT LINK Handling (Ye raha aapka purana system)
     elif text.startswith("http"):
         bot.send_message(chat_id, "⚡ Direct Link mil gaya! Fast Download shuru...")
-        # Quality ko "direct" set kiya taake curl use ho
         threading.Thread(target=master_process, args=(text, "direct")).start()
 
 @bot.callback_query_handler(func=lambda call: True)
@@ -64,34 +58,41 @@ def handle_query(call):
 def master_process(link, quality):
     try:
         # ==========================================
-        # 📥 STEP 1: SMART DOWNLOADER
+        # 📥 STEP 1: DOWNLOADER (TV FIX)
         # ==========================================
-        
-        # A. AGAR DIRECT LINK HAI (Aapki Requirement)
         if quality == "direct":
-            bot.send_message(chat_id, "🚀 Direct File Download ho rahi hai (curl)...")
+            bot.send_message(chat_id, "🚀 Direct File Download (curl)...")
             os.system(f"curl -L -o {FILE_NAME} '{link}'")
 
-        # B. AGAR YOUTUBE HAI (iOS Fix ke saath)
         else:
-            bot.send_message(chat_id, f"📥 YouTube ({quality}) Download (iOS Mode)...")
-            # Force Update yt-dlp first
+            bot.send_message(chat_id, f"📥 YouTube ({quality}) Download (TV Mode)...")
+            
+            # Update Tool
             os.system("pip install --force-reinstall https://github.com/yt-dlp/yt-dlp/archive/master.zip > /dev/null")
             
-            client_arg = '--extractor-args "youtube:player_client=ios"'
+            # 🔥 MAGIC LINE: Use 'tv' client to bypass bot detection
+            client_arg = '--extractor-args "youtube:player_client=tv"'
+            
             if quality == "best":
                 cmd = f'yt-dlp {client_arg} -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
             else:
                 cmd = f'yt-dlp {client_arg} -f "bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={quality}]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
-            os.system(cmd)
+            
+            exit_code = os.system(cmd)
 
-        # Check File
+            # Fallback: Agar TV fail ho to 'Android Creator' try karein
+            if exit_code != 0 or not os.path.exists(FILE_NAME):
+                bot.send_message(chat_id, "⚠️ TV Mode fail hua, 'Android Creator' try kar raha hoon...")
+                client_arg = '--extractor-args "youtube:player_client=android_creator"'
+                cmd = cmd.replace('player_client=tv', 'player_client=android_creator')
+                os.system(cmd)
+
         if not os.path.exists(FILE_NAME):
-            bot.send_message(chat_id, "❌ Error: File download nahi hui! Link check karein.")
+            bot.send_message(chat_id, "❌ Error: File download nahi hui! YouTube ne IP block kar diya hai.")
             return
 
         # ==========================================
-        # 🛰️ STEP 2: UPLOAD (Fixed Logic)
+        # 🛰️ STEP 2: UPLOAD
         # ==========================================
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -102,7 +103,7 @@ def master_process(link, quality):
                 page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
                 time.sleep(5)
 
-                # Cookie Banner Removal
+                # Cookie Banner
                 try:
                     if page.locator(XPATH_ACCEPT_ALL).is_visible():
                         page.locator(XPATH_ACCEPT_ALL).click()
@@ -125,7 +126,7 @@ def master_process(link, quality):
                     time.sleep(8)
                     context.storage_state(path="state.json")
 
-                # Upload Logic
+                # Upload
                 bot.send_message(chat_id, "🚀 Uploading shuru...")
                 try:
                     page.locator("header button").filter(has_text="cloud_upload").click() 
@@ -145,7 +146,6 @@ def master_process(link, quality):
                     page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
 
                 time.sleep(5)
-                # 1GB+ Fix
                 if page.get_by_text("Yes", exact=True).is_visible(): 
                     page.get_by_text("Yes", exact=True).click()
 
