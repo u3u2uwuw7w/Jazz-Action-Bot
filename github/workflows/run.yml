@@ -1,4 +1,4 @@
-name: Jazz Drive Browser Bot
+name: Jazz Drive PyTubeFix
 
 on:
   workflow_dispatch:
@@ -18,7 +18,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg
-          pip install playwright pyTelegramBotAPI
+          # 🔥 YE NAYI LIBRARY HAI JO YOUTUBE KO FIX KAREGI
+          pip install pytubefix playwright pyTelegramBotAPI
           playwright install chromium
 
       - name: Run Bot
