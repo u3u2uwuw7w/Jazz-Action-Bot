@@ -25,7 +25,7 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "📸 **ERROR SCREENSHOT SYSTEM ACTIVE**\n\nAb agar koi error aaya toh main photo bhejunga. Link bhejein!")
+    bot.send_message(chat_id, "🎥 **LIVE VIEW BOT ONLINE**\n\nAb main chup nahi rahoonga, har minute progress dikhaunga. Link bhejein!")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
@@ -41,7 +41,7 @@ def handle_msg(message):
         user_context["link"] = text
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("360p", callback_data="360"), types.InlineKeyboardButton("720p", callback_data="720"))
-        markup.add(types.InlineKeyboardButton("1080p", callback_data="1080"))
+        markup.add(types.InlineKeyboardButton("Best", callback_data="best"))
         bot.send_message(chat_id, "🎬 YouTube Quality select karein:", reply_markup=markup)
     elif text.startswith("http"):
         bot.send_message(chat_id, "📥 Link mil gaya! Download shuru...")
@@ -50,7 +50,7 @@ def handle_msg(message):
 @bot.callback_query_handler(func=lambda call: True)
 def handle_query(call):
     quality = call.data
-    bot.answer_callback_query(call.id, f"{quality}p selected!")
+    bot.answer_callback_query(call.id, f"{quality} selected!")
     threading.Thread(target=master_process, args=(user_context["link"], quality)).start()
 
 def master_process(link, quality):
@@ -85,9 +85,7 @@ def master_process(link, quality):
 
                 # Login Check
                 if page.locator("//*[@id='msisdn']").is_visible():
-                    take_screenshot(page, "🔑 Login Required Screen")
                     bot.send_message(chat_id, "🔑 Login Expired! Number (03...) bhejein:")
-                    
                     user_context["state"] = "WAITING_FOR_NUMBER"
                     while user_context["state"] != "NUMBER_RECEIVED": time.sleep(1)
                     page.locator("//*[@id='msisdn']").fill(user_context["number"])
@@ -113,26 +111,32 @@ def master_process(link, quality):
                         page.locator("div[role='dialog'] >> text=/upload files/i").first.click(force=True)
                     fc_info.value.set_files(os.path.abspath(FILE_NAME))
                 else:
-                    # Fallback method
                     page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
 
                 # 1GB+ Bypass
                 time.sleep(5)
                 if page.get_by_text("Yes", exact=True).is_visible(): 
                     page.get_by_text("Yes", exact=True).click()
-                    bot.send_message(chat_id, "✅ Large File 'Yes' clicked.")
+                    bot.send_message(chat_id, "✅ Large File Detected & Accepted.")
 
-                # Wait for completion (Corrected Syntax)
-                bot.send_message(chat_id, "⏳ Uploading in progress...")
-                page.get_by_text("Uploads completed").wait_for(state="visible", timeout=0)
+                # 🔥 LIVE MONITORING LOOP (Ye naya hai)
+                bot.send_message(chat_id, "👀 Monitoring Active: Har 1 min baad photo aayegi...")
+                
+                start_time = time.time()
+                while not page.get_by_text("Uploads completed").is_visible():
+                    # Har 60 seconds baad screenshot
+                    if time.time() - start_time > 60:
+                        take_screenshot(page, "🕒 Uploading Progress...")
+                        start_time = time.time() # Timer reset
+                    
+                    time.sleep(2) # CPU relax
                 
                 take_screenshot(page, "✅ Upload Complete Screen")
                 bot.send_message(chat_id, "🎉 MUBARAK! File upload ho gayi.")
 
             except Exception as e:
-                # 🔥 ERROR SCREENSHOT FEATURE 🔥
-                take_screenshot(page, "❌ Error ke waqt ki screen")
-                bot.send_message(chat_id, f"❌ Error Log: {str(e)[:200]}")
+                take_screenshot(page, "❌ Error Screen")
+                bot.send_message(chat_id, f"❌ Error: {str(e)[:200]}")
             
             browser.close()
 
