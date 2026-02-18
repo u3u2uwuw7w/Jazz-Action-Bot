@@ -5,7 +5,7 @@ import telebot
 from telebot import types
 from playwright.sync_api import sync_playwright
 
-# 🔑 Details (Fixed)
+# 🔑 Details
 TOKEN = "8485872476:AAGt-C0JKjr6JpLwvIGtGWwMh-sFh0-PsC0"
 chat_id = 7144917062
 bot = telebot.TeleBot(TOKEN)
@@ -27,26 +27,33 @@ def take_screenshot(page, caption):
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.send_message(chat_id, "🚀 **YOUTUBE FIXED BOT ONLINE**\n\nAb 'Sign in' wala error nahi aayega. Link bhejein!")
+    bot.send_message(chat_id, "🚀 **ALL-ROUNDER BOT READY**\n\n✅ Direct Link = Fast Download\n✅ YouTube = No Block Fix\n\nLink bhejein!")
 
 @bot.message_handler(func=lambda m: True)
 def handle_msg(message):
     text = message.text.strip()
+    
+    # 1. Login Handling
     if user_context["state"] == "WAITING_FOR_NUMBER":
         user_context["number"] = text
         user_context["state"] = "NUMBER_RECEIVED"
     elif user_context["state"] == "WAITING_FOR_OTP":
         user_context["otp"] = text
         user_context["state"] = "OTP_RECEIVED"
+    
+    # 2. YouTube Handling
     elif "youtube.com" in text or "youtu.be" in text:
         user_context["link"] = text
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("360p", callback_data="360"), types.InlineKeyboardButton("720p", callback_data="720"))
         markup.add(types.InlineKeyboardButton("Best", callback_data="best"))
         bot.send_message(chat_id, "🎬 YouTube Quality select karein:", reply_markup=markup)
+    
+    # 3. DIRECT LINK Handling (Ye raha aapka purana system)
     elif text.startswith("http"):
-        bot.send_message(chat_id, "📥 Link mil gaya! Download shuru...")
-        threading.Thread(target=master_process, args=(text, "best")).start()
+        bot.send_message(chat_id, "⚡ Direct Link mil gaya! Fast Download shuru...")
+        # Quality ko "direct" set kiya taake curl use ho
+        threading.Thread(target=master_process, args=(text, "direct")).start()
 
 @bot.callback_query_handler(func=lambda call: True)
 def handle_query(call):
@@ -56,23 +63,36 @@ def handle_query(call):
 
 def master_process(link, quality):
     try:
-        # 1. DOWNLOAD (FIXED FOR YOUTUBE BLOCK)
-        bot.send_message(chat_id, f"📥 Downloading ({quality})...")
+        # ==========================================
+        # 📥 STEP 1: SMART DOWNLOADER
+        # ==========================================
         
-        # 🔥 Yahan humne 'android' client use kiya hai taake YouTube block na kare
-        if quality == "best":
-            cmd = f'yt-dlp --extractor-args "youtube:player_client=android" -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
-        else:
-            cmd = f'yt-dlp --extractor-args "youtube:player_client=android" -f "bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={quality}]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
-            
-        os.system(cmd)
+        # A. AGAR DIRECT LINK HAI (Aapki Requirement)
+        if quality == "direct":
+            bot.send_message(chat_id, "🚀 Direct File Download ho rahi hai (curl)...")
+            os.system(f"curl -L -o {FILE_NAME} '{link}'")
 
-        # Check if file exists
+        # B. AGAR YOUTUBE HAI (iOS Fix ke saath)
+        else:
+            bot.send_message(chat_id, f"📥 YouTube ({quality}) Download (iOS Mode)...")
+            # Force Update yt-dlp first
+            os.system("pip install --force-reinstall https://github.com/yt-dlp/yt-dlp/archive/master.zip > /dev/null")
+            
+            client_arg = '--extractor-args "youtube:player_client=ios"'
+            if quality == "best":
+                cmd = f'yt-dlp {client_arg} -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
+            else:
+                cmd = f'yt-dlp {client_arg} -f "bestvideo[height<={quality}][ext=mp4]+bestaudio[ext=m4a]/best[height<={quality}]/best" --merge-output-format mp4 -o {FILE_NAME} "{link}"'
+            os.system(cmd)
+
+        # Check File
         if not os.path.exists(FILE_NAME):
-            bot.send_message(chat_id, "❌ Error: YouTube ne abhi bhi block kiya. Dobara try karein ya doosra link dein.")
+            bot.send_message(chat_id, "❌ Error: File download nahi hui! Link check karein.")
             return
 
-        # 2. UPLOAD
+        # ==========================================
+        # 🛰️ STEP 2: UPLOAD (Fixed Logic)
+        # ==========================================
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(viewport={'width': 1280, 'height': 720}, storage_state="state.json" if os.path.exists("state.json") else None)
@@ -82,7 +102,7 @@ def master_process(link, quality):
                 page.goto("https://cloud.jazzdrive.com.pk/", wait_until="networkidle")
                 time.sleep(5)
 
-                # Cookie Banner
+                # Cookie Banner Removal
                 try:
                     if page.locator(XPATH_ACCEPT_ALL).is_visible():
                         page.locator(XPATH_ACCEPT_ALL).click()
@@ -125,6 +145,7 @@ def master_process(link, quality):
                     page.set_input_files("input[type='file']", os.path.abspath(FILE_NAME))
 
                 time.sleep(5)
+                # 1GB+ Fix
                 if page.get_by_text("Yes", exact=True).is_visible(): 
                     page.get_by_text("Yes", exact=True).click()
 
