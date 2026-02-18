@@ -1,0 +1,30 @@
+name: Jazz Drive Uploader
+
+on:
+  workflow_dispatch:
+    inputs:
+      link:
+        description: 'Direct Download Link Yahan Dalein'
+        required: true
+
+jobs:
+  upload_job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Python Setup
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Tools Install
+        run: |
+          pip install playwright pyTelegramBotAPI
+          playwright install chromium
+
+      - name: Run Uploader
+        env:
+          FILE_LINK: ${{ github.event.inputs.link }}
+        run: python upload.py
