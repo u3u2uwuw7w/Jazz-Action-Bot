@@ -1,36 +1,24 @@
 name: Jazz Drive Bot
-
 on:
-  workflow_dispatch: # Taake aap khud button daba kar start kar sakein
+  workflow_dispatch:
   push:
-    branches: [ main ] # Jab bhi code update karein toh bot start ho jaye
-
+    branches: [ main ]
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: 📂 Checking out code
-      uses: actions/checkout@v3 # Ye apki tokens.json aur state.json ko copy karega
-
-    - name: 🐍 Setting up Python
+    - name: 📂 Checkout Code
+      uses: actions/checkout@v3
+    - name: 🐍 Python Setup
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
-
-    - name: 📥 Installing System Tools
+    - name: 📥 Tools & Libraries
       run: |
         sudo apt-get update
-        sudo apt-get install -y aria2 # Direct links download karne ke liye
-
-    - name: 📚 Installing Python Libraries
-      run: |
-        pip install pyTelegramBotAPI playwright pytubefix # Pytubefix lazmi hai
-
-    - name: 🌐 Installing Playwright Browser
-      run: |
-        playwright install chromium --with-deps
-
-    - name: 🚀 Running the Bot
-      run: |
-        python upload.py
+        sudo apt-get install -y aria2
+        pip install pyTelegramBotAPI playwright pytubefix
+    - name: 🌐 Playwright Install
+      run: playwright install chromium --with-deps
+    - name: 🚀 Start Bot
+      run: python upload.py
