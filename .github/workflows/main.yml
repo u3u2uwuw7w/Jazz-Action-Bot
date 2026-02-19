@@ -1,32 +1,36 @@
-name: Jazz Drive Direct Bot
+name: Jazz 24/7 Bot
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *' # Har 6 ghante baad auto-restart
 
 jobs:
   run_bot:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Restart permission
+
     steps:
       - uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install Tools
+      - name: Setup Environment
         run: |
+          sudo apt-get install -y aria2 ffmpeg
           pip install playwright pyTelegramBotAPI
           playwright install chromium
 
-      - name: Run Bot
+      - name: Run Bot (Loop Mode)
+        # 5h 50m par band hoga taake restart ho sake
+        timeout-minutes: 350 
+        continue-on-error: true
         run: python upload.py
 
-      - name: Save Session
+      - name: Auto-Restart Trigger 🔄
         if: always()
         run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
-          git add state.json
-          git commit -m "Save Login" || exit 0
-          git push
+          echo "Restarting workflow..."
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          -H "Accept: application/vnd.github.v3+json" \
+          https://api.github.com/repos/${{ github.repository }}/actions/workflows/run.yml/dispatches \
+          -d '{"ref":"main"}'
