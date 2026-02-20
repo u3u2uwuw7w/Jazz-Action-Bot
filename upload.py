@@ -140,30 +140,53 @@ def process_task(link):
                     return 
 
                 bot.send_message(CHAT_ID, "✅ Login theek hai! Uploading shuru...")
+                
+                # Cookie popup hatana
+                try:
+                    page.click("button:has-text('Accept All')", timeout=3000)
+                    time.sleep(1)
+                except: pass
+
+                # Main icon par click karna
                 try: 
                     page.evaluate("document.querySelectorAll('header button').forEach(b => { if(b.innerHTML.includes('svg')) b.click(); })")
                 except: pass
-                time.sleep(3)
+                time.sleep(2)
                 
-                # File attach karna
-                page.set_input_files("input[type='file']", os.path.abspath(filename), timeout=60000)
+                # 'Upload files' menu par click kar ke file dena
+                try:
+                    with page.expect_file_chooser(timeout=10000) as fc_info:
+                        page.click("text='Upload files'")
+                    file_chooser = fc_info.value
+                    file_chooser.set_files(os.path.abspath(filename))
+                except:
+                    page.set_input_files("input[type='file']", os.path.abspath(filename), timeout=15000)
+                
+                time.sleep(2) # Thora intezar taake agar "Yes" wala button aana ho toh aa jaye
+                
+                # 🛠️ NAYA FIX: 1GB+ File wala "Yes" Button
+                try:
+                    # Agar warning aayi, toh Yes dabayega
+                    page.click("button:has-text('Yes'), button:has-text('YES'), button:has-text('yes')", timeout=4000)
+                    bot.send_message(CHAT_ID, "⚠️ Bari file (1GB+) warning detect hui, 'Yes' par click kar diya hai!")
+                    time.sleep(1)
+                except:
+                    pass # Koi warning nahi aayi, chup chaap aage barh jao
+                
                 bot.send_message(CHAT_ID, "📁 File website par lag gayi hai. Har 1 minute baad aapko progress ka screenshot milega! ⏳")
                 
-                # 📸 NAYA SYSTEM: Har 1 minute baad check karna aur picture bhejna
+                # 📸 Live Progress Screenshots (1 min)
                 upload_done = False
-                for i in range(25): # Maximum 25 minute intezar karega
+                for i in range(25): 
                     try:
-                        # 60 second tak "Uploads completed" dhoondega
                         page.wait_for_selector("text=Uploads completed", timeout=60000)
                         upload_done = True
-                        break # Agar mil gaya toh loop se nikal aayega
+                        break 
                     except:
-                        # Agar 60 second mein na mila, toh screenshot bheje
                         try:
                             page.screenshot(path="progress.png")
                             bot.send_photo(CHAT_ID, open("progress.png", "rb"), caption=f"⏳ Upload Progress: {i+1} minute guzar gaye...")
-                        except:
-                            pass
+                        except: pass
                 
                 if upload_done:
                     bot.send_message(CHAT_ID, f"🎉 SUCCESS! {filename} mukammal upload ho gayi hai.")
