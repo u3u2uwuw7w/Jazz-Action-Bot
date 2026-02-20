@@ -17,6 +17,7 @@ jobs:
 
       - name: Setup Environment
         run: |
+          sudo apt-get update # 👈 Ye line update karegi aur error khatam ho jayega
           sudo apt-get install -y aria2 ffmpeg
           pip install playwright pyTelegramBotAPI
           playwright install chromium
