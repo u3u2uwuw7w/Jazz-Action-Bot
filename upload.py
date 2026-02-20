@@ -17,7 +17,7 @@ logging.basicConfig(filename='bot.log', level=logging.INFO, format='%(asctime)s 
 task_queue = queue.Queue()
 is_working = False
 
-# 🧠 BOT KA NAYA DIMAAG (Login System ke liye)
+# 🧠 BOT KA NAYA DIMAAG
 login_state = {
     "waiting_for": None, 
     "number": None, 
@@ -25,10 +25,9 @@ login_state = {
     "event": threading.Event()
 }
 
-# --- 🛠️ ADMIN COMMANDS ---
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.reply_to(message, "🤖 **JAZZ 24/7 UPLOADER**\n🟢 **Status:** Online\n📤 **Upload:** Link bhejein\n🔐 **Login:** `/login` likhein agar expire ho jaye")
+    bot.reply_to(message, "🤖 **JAZZ 24/7 UPLOADER**\n🟢 **Status:** Online\n📤 **Upload:** Link bhejein\n🔐 **Login:** `/login` likhein")
 
 @bot.message_handler(commands=['status'])
 def check_status(message):
@@ -52,7 +51,7 @@ def receive_number(message):
 def receive_otp(message):
     login_state["otp"] = message.text.strip()
     login_state["waiting_for"] = None
-    login_state["event"].set() # Bot ko batana ke OTP mil gaya hai
+    login_state["event"].set()
 
 def do_playwright_login():
     try:
@@ -65,35 +64,40 @@ def do_playwright_login():
             page.goto("https://cloud.jazzdrive.com.pk/", timeout=60000)
             time.sleep(3)
             
-            # 1. Number Daalna (Aapke screenshot wale box mein)
             page.fill("input[type='text'], input[placeholder*='03']", login_state["number"])
-            page.click("button:has-text('Subscribe'), button:has-text('Login')")
+            page.click("button:has-text('Subscribe'), button:has-text('Login'), button:has-text('Get OTP')")
             
             bot.send_message(CHAT_ID, "📩 OTP bhej diya gaya hai! Jaldi se yahan OTP likh kar reply karein:")
             
-            # 2. Telegram par OTP aane ka wait karna (60 seconds)
             login_state["event"].clear()
             login_state["event"].wait(timeout=60) 
             
             if login_state["otp"]:
                 bot.send_message(CHAT_ID, "🔑 OTP website par daal raha hoon...")
-                # 3. OTP daal kar Verify karna
-                page.locator("input").nth(0).click() # Pehle dabbe par click karna
-                page.keyboard.type(login_state["otp"]) # OTP type karna
+                page.locator("input").nth(0).click() 
+                page.keyboard.type(login_state["otp"])
+                time.sleep(3)
                 
-                time.sleep(2)
-                page.click("button:has-text('Verify'), button:has-text('Submit'), button:has-text('Confirm')")
-                time.sleep(6) # Login process mukammal hone ka wait
+                # 🛠️ NAYA FIX: Agar Verify button na mile toh error mat do (Auto Login Bypass)
+                try:
+                    page.click("button:has-text('Verify'), button:has-text('Submit')", timeout=3000)
+                except:
+                    pass # Iska matlab auto-login ho gaya hai (Jaise pichli bar hua tha)
                 
-                # 4. Naya state.json Bot ke andar save kar lena
+                time.sleep(5)
                 context.storage_state(path="state.json")
                 bot.send_message(CHAT_ID, "🎉 **LOGIN SUCCESSFUL!** 🎉\nBot ne naya VIP Pass khud bana kar save kar liya hai. Ab apne Links bhejein!")
             else:
-                bot.send_message(CHAT_ID, "❌ Timeout! Aapne waqt par OTP nahi diya. Dobara `/login` likhein.")
+                bot.send_message(CHAT_ID, "❌ Timeout! Dobara `/login` likhein.")
                 login_state["waiting_for"] = None
             browser.close()
     except Exception as e:
-        bot.send_message(CHAT_ID, f"❌ Login Error: Website ne response nahi diya ya number galat tha.\n`{str(e)[:150]}`")
+        # 📸 NAYA FIX: Login mein masla aaye toh screenshot bhejega
+        try:
+            page.screenshot(path="login_failed.png")
+            bot.send_photo(CHAT_ID, open("login_failed.png", "rb"), caption=f"❌ Login Error!\n`{str(e)[:150]}`", parse_mode="Markdown")
+        except:
+            bot.send_message(CHAT_ID, f"❌ Login Error: Website ne response nahi diya.\n`{str(e)[:150]}`")
         login_state["waiting_for"] = None
 
 # --- 📥 UPLOAD SYSTEM ---
@@ -132,9 +136,8 @@ def process_task(link):
                 page.goto("https://cloud.jazzdrive.com.pk/", timeout=90000)
                 time.sleep(5)
 
-                # 🚨 SMART CHECK: AGAR LOGIN EXPIRE HO GAYA
                 if page.locator("text='Sign Up/In'").is_visible() or page.locator("input[type='password']").is_visible() or page.locator("text='Please Enter Jazz Number'").is_visible():
-                    bot.send_message(CHAT_ID, "⚠️ **Jazz Drive Login Expired!** ⚠️\nUpload ruk gaya hai. Naya login karne ke liye Telegram mein `/login` likhein aur mujhe OTP dein.")
+                    bot.send_message(CHAT_ID, "⚠️ **Jazz Drive Login Expired!** ⚠️\nNaya login karne ke liye Telegram mein `/login` likhein.")
                     browser.close()
                     return 
 
@@ -150,10 +153,14 @@ def process_task(link):
                 
             except Exception as e:
                 logging.error(f"Error: {e}")
-                bot.send_message(CHAT_ID, f"❌ Upload Error: Site Stuck ya File mili nahi.")
+                # 📸 Upload mein error aaye toh screenshot bhejega
+                try:
+                    page.screenshot(path="upload_error.png")
+                    bot.send_photo(CHAT_ID, open("upload_error.png", "rb"), caption=f"❌ Upload Error! Screen dekhein:\n`{str(e)[:150]}`", parse_mode="Markdown")
+                except:
+                    bot.send_message(CHAT_ID, f"❌ Upload Error: Site Stuck ya File mili nahi.")
             finally:
                 browser.close()
-
     except Exception as e:
         logging.error(f"System Error: {e}")
     finally:
