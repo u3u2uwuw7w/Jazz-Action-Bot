@@ -78,11 +78,10 @@ def do_playwright_login():
                 page.keyboard.type(login_state["otp"])
                 time.sleep(3)
                 
-                # 🛠️ NAYA FIX: Agar Verify button na mile toh error mat do (Auto Login Bypass)
                 try:
                     page.click("button:has-text('Verify'), button:has-text('Submit')", timeout=3000)
                 except:
-                    pass # Iska matlab auto-login ho gaya hai (Jaise pichli bar hua tha)
+                    pass 
                 
                 time.sleep(5)
                 context.storage_state(path="state.json")
@@ -92,7 +91,6 @@ def do_playwright_login():
                 login_state["waiting_for"] = None
             browser.close()
     except Exception as e:
-        # 📸 NAYA FIX: Login mein masla aaye toh screenshot bhejega
         try:
             page.screenshot(path="login_failed.png")
             bot.send_photo(CHAT_ID, open("login_failed.png", "rb"), caption=f"❌ Login Error!\n`{str(e)[:150]}`", parse_mode="Markdown")
@@ -147,13 +145,33 @@ def process_task(link):
                 except: pass
                 time.sleep(3)
                 
+                # File attach karna
                 page.set_input_files("input[type='file']", os.path.abspath(filename), timeout=60000)
-                page.wait_for_selector("text=Uploads completed", timeout=1200000)
-                bot.send_message(CHAT_ID, f"🎉 SUCCESS! {filename} uploaded.")
+                bot.send_message(CHAT_ID, "📁 File website par lag gayi hai. Har 1 minute baad aapko progress ka screenshot milega! ⏳")
+                
+                # 📸 NAYA SYSTEM: Har 1 minute baad check karna aur picture bhejna
+                upload_done = False
+                for i in range(25): # Maximum 25 minute intezar karega
+                    try:
+                        # 60 second tak "Uploads completed" dhoondega
+                        page.wait_for_selector("text=Uploads completed", timeout=60000)
+                        upload_done = True
+                        break # Agar mil gaya toh loop se nikal aayega
+                    except:
+                        # Agar 60 second mein na mila, toh screenshot bheje
+                        try:
+                            page.screenshot(path="progress.png")
+                            bot.send_photo(CHAT_ID, open("progress.png", "rb"), caption=f"⏳ Upload Progress: {i+1} minute guzar gaye...")
+                        except:
+                            pass
+                
+                if upload_done:
+                    bot.send_message(CHAT_ID, f"🎉 SUCCESS! {filename} mukammal upload ho gayi hai.")
+                else:
+                    bot.send_message(CHAT_ID, "⚠️ 25 minute timeout! Upload poora nahi hua.")
                 
             except Exception as e:
                 logging.error(f"Error: {e}")
-                # 📸 Upload mein error aaye toh screenshot bhejega
                 try:
                     page.screenshot(path="upload_error.png")
                     bot.send_photo(CHAT_ID, open("upload_error.png", "rb"), caption=f"❌ Upload Error! Screen dekhein:\n`{str(e)[:150]}`", parse_mode="Markdown")
