@@ -3,13 +3,14 @@ name: Jazz 24/7 Bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *' # Har 6 ghante baad auto-restart
+    - cron: '0 */6 * * *'
 
 jobs:
   run_bot:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Restart permission
+      contents: write
+      actions: write
 
     steps:
       - uses: actions/checkout@v3
@@ -21,7 +22,6 @@ jobs:
           playwright install chromium
 
       - name: Run Bot (Loop Mode)
-        # 5h 50m par band hoga taake restart ho sake
         timeout-minutes: 350 
         continue-on-error: true
         run: python upload.py
